@@ -1,0 +1,30 @@
+{
+    "format_version": 2,
+    "header": {
+        "name": "Biologisches §4KitFFA§r Plugin",
+        "description": "§aBiologisches Plugin für §4KitFFA§r.",
+        "uuid": "2a701cca-261f-4bb2-bce4-f0275c71414e",
+        "version": [0, 1, 0],
+        "min_engine_version": [1, 20, 0]
+    },
+    "modules": [
+        {
+            "type": "script",
+            "language": "javascript",
+            "uuid": "2691b1f8-d62a-4f3e-a57b-d03dad28723e",
+            "entry": "scripts/main.js",
+            "version": [0, 1, 0]
+        }
+    ],
+    "capabilities": ["script_eval"],
+    "dependencies": [
+        {
+            "module_name": "@minecraft/server",
+            "version": "1.16.0"
+        },
+        {
+            "module_name": "@minecraft/server-ui",
+            "version": "1.3.0"
+        }
+    ]
+}
