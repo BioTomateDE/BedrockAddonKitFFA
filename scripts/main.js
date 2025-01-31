@@ -47,7 +47,7 @@ world.afterEvents.entityDie.subscribe(data => {
     scoreboardKillstreak.addScore(attacker, 1);
     attacker.playSound("random.orb", {pitch: 2})
     attacker.addEffect("absorption", 600, {amplifier: 0, showParticles: false});
-    attacker.addEffect("saturation", 20, {amplifier: 1, showParticles: true});
+    attacker.addEffect("saturation", 20, {amplifier: 0, showParticles: true});
     attacker.addEffect("regeneration", 100, {amplifier: 2, showParticles: true});
 });
 
