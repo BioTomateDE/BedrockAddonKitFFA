@@ -69,7 +69,10 @@ system.runInterval(() => {
     let scoreboardDeaths = getObjective("deaths");
     let scoreboardKillstreak = getObjective("kill_streak");
 
-    world.getAllPlayers().forEach((player) => {
+    let allPlayers = world.getAllPlayers();
+    let onlineCount = allPlayers.length;
+
+    allPlayers.forEach((player) => {
         let playtimeTotalTicks = scoreboardPlaytime.getScore(player);
         playtimeTotalTicks = playtimeTotalTicks === undefined ? 0 : playtimeTotalTicks;
 
@@ -116,7 +119,8 @@ system.runInterval(() => {
             player.onScreenDisplay.setActionBar(
                 `§2Kills§r: ${kills} §i|§r §cDeaths§r: ${deaths}§r\n` +
                 `§bKD§r: ${kdString}§r\n` +
-                `§ePlaytime§r: ${playtimeString}§r`
+                `§ePlaytime§r: ${playtimeString}§r\n` +
+                `§dOnline§r: ${onlineCount}§r`
             );
         }
 
