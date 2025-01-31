@@ -138,7 +138,7 @@ system.runInterval(() => {
         let killstreak = getScore(scoreboardKillstreak, player);
 
         let kills = getScore(scoreboardKills, player);
-        let deaths = getScore(scoreboardKills, player);
+        let deaths = getScore(scoreboardDeaths, player);
         let kdRatio = getKD(player, {kills: kills, deaths: deaths});
         let kdString = kdRatio.toFixed(2);
 
@@ -174,17 +174,17 @@ system.runInterval(() => {
 
         let nametagColor = admins.includes(player.name) ? '§c' : '§e';
 
-        // https://wiki.bedrock.dev/concepts/emojis
+        // Custom Emojis from "Crystal Mett" RP  (https://wiki.bedrock.dev/concepts/emojis)
         let deviceIcon = '';
         switch (player.clientSystemInfo.platformType) {
             case PlatformType.Desktop:
-                deviceIcon = '\uE070 ';   // Keyboard & Mouse: "Small Left Click"
+                deviceIcon = '\uE1D2 ';
                 break;
             case PlatformType.Mobile:
-                deviceIcon = '\uE015 ';   // New Touch: "Attack"
+                deviceIcon = '\uE1D1 ';
                 break;
             case PlatformType.Console:
-                deviceIcon = '\uE020 '   // PlayStation (4/5): "Cross"
+                deviceIcon = '\uE1D0 '
                 break;
         }
 
