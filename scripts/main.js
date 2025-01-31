@@ -1,4 +1,4 @@
-import {world, system, Player, Entity} from "@minecraft/server";
+import {world, system, Player, Entity, PlatformType} from "@minecraft/server";
 
 const admins = [
     "BioTomateDE",
@@ -141,7 +141,22 @@ system.runInterval(() => {
         }
 
         let nametagColor = admins.includes(player.name) ? '§c' : '§e';
-        player.nameTag = `${nametagColor}${player.name}\n§iKD: ${kdString}§r`;
+
+        // https://wiki.bedrock.dev/concepts/emojis
+        let deviceIcon = '';
+        switch (player.clientSystemInfo.platformType) {
+            case PlatformType.Desktop:
+                deviceIcon = '\uE070 ';   // Keyboard & Mouse: "Small Left Click"
+                break;
+            case PlatformType.Mobile:
+                deviceIcon = '\uE015 ';   // New Touch: "Attack"
+                break;
+            case PlatformType.Console:
+                deviceIcon = '\uE020 '   // PlayStation (4/5): "Cross"
+                break;
+        }
+
+        player.nameTag = `${nametagColor}${player.name}\n${deviceIcon}§iKD: ${kdString}§r`;
     })
 
 
