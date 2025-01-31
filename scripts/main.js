@@ -20,7 +20,7 @@ function getObjective(objectiveName) {
 
 // useful for debugging without spamming everyone in the server
 function log(...args) {
-    let players = world.getAllPlayers().filter(player => admins.contains(player.name));
+    let players = world.getAllPlayers().filter(player => admins.includes(player.name));
     players.forEach(player => player.sendMessage(String(...args)));
 }
 
@@ -32,15 +32,19 @@ world.afterEvents.entityDie.subscribe(data => {
     }
 
     let scoreboardDeaths = getObjective("deaths");
+    let scoreboardKills = getObjective("kills");
+    let scoreboardKillstreak = getObjective("kill_streak");
+
     scoreboardDeaths.addScore(data.deadEntity, 1);
-    
+    scoreboardKillstreak.setScore(data.deadEntity, 0);
+
     if (data.damageSource?.damagingEntity === undefined || data.damageSource.damagingEntity.typeId !== "minecraft:player") {
         return;
     }
-    let attacker = data.damageSource.damagingEntity;
 
-    let scoreboardKills = getObjective("kills");
+    let attacker = data.damageSource.damagingEntity;
     scoreboardKills.addScore(attacker, 1);
+    scoreboardKillstreak.addScore(attacker, 1);
     attacker.playSound("random.orb", {pitch: 2})
     attacker.addEffect("absorption", 600, {amplifier: 0, showParticles: false});
     attacker.addEffect("saturation", 20, {amplifier: 1, showParticles: true});
@@ -116,7 +120,7 @@ system.runInterval(() => {
             );
         }
 
-        let nametagColor = admins.contains(player.name) ? '§c' : '§e';
+        let nametagColor = admins.includes(player.name) ? '§c' : '§e';
         player.nameTag = `${nametagColor}${player.name}\n§iKD: ${kdString}§r`;
     })
 
