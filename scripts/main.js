@@ -8,13 +8,26 @@ const admins = [
 ]
 
 
-function getObjective(objectiveName) {
+function getObjective(objectiveName, creationDisplayName=null) {
     let objective = world.scoreboard.getObjective(objectiveName);
     if (objective !== undefined) {
         return objective;
     }
     world.sendMessage(`[§gWARN§r] Creating objective "${objectiveName}" since it didn't exist!`);
-    return world.scoreboard.addObjective(objectiveName);
+    let objectiveDisplayName = objectiveName;
+    if (creationDisplayName !== null) {
+        objectiveDisplayName = creationDisplayName;
+    }
+    return world.scoreboard.addObjective(objectiveName, objectiveDisplayName);
+}
+
+
+function getScore(objective, player) {
+    let score = objective.getScore(player);
+    if (score === undefined) {
+        score = 0;
+    }
+    return score;
 }
 
 
@@ -22,6 +35,32 @@ function getObjective(objectiveName) {
 function log(...args) {
     let players = world.getAllPlayers().filter(player => admins.includes(player.name));
     players.forEach(player => player.sendMessage(String(...args)));
+}
+
+
+function getKD(player, options={}) {
+    let scoreboardKills = options['scoreboardKills'];
+    let scoreboardDeaths = options['scoreboardDeaths'];
+    let kills = options['kills'];
+    let deaths = options['deaths'];
+
+    if (kills === undefined) {
+        if (scoreboardKills === undefined) {
+            scoreboardKills = getObjective("kills");
+        }
+        kills = getScore(scoreboardKills, player);
+    }
+
+    if (deaths === undefined) {
+        if (scoreboardDeaths === undefined) {
+            scoreboardDeaths = getObjective("deaths");
+        }
+        deaths = getScore(scoreboardDeaths, player);
+    }
+
+    deaths = deaths === 0 ? 1 : deaths;    // prevent zero division
+    let kdRatio = kills / deaths;
+    return kdRatio;
 }
 
 
@@ -96,18 +135,11 @@ system.runInterval(() => {
             return;
         }
 
-        let kills = scoreboardKills.getScore(player);
-        kills = kills === undefined ? 0 : kills;
+        let killstreak = getScore(scoreboardKillstreak, player);
 
-        let deaths = scoreboardDeaths.getScore(player);
-        deaths = deaths === undefined ? 0 : deaths;
-
-        let killstreak = scoreboardKillstreak.getScore(player);
-        killstreak = killstreak === undefined ? 0 : killstreak;
-
-        // prevent zero division
-        let deaths_for_kd = deaths === 0 ? 1 : deaths;
-        let kdRatio = kills / deaths_for_kd;
+        let kills = getScore(scoreboardKills, player);
+        let deaths = getScore(scoreboardKills, player);
+        let kdRatio = getKD(player, {kills: kills, deaths: deaths});
         let kdString = kdRatio.toFixed(2);
 
         let playtimeSeconds = Math.floor(playtimeTotalTicks / 20) % 60;
@@ -161,6 +193,35 @@ system.runInterval(() => {
 
 
 }, 10);
+
+
+// Update Leaderboard
+system.runInterval(() => {
+    let scoreboardLeaderboard = getObjective("leaderboard", "§gLeaderboard");
+    scoreboardLeaderboard.getParticipants().forEach(participant => scoreboardLeaderboard.removeParticipant(participant));
+
+    let allPlayers = world.getAllPlayers();
+    let scoreboardKills = getObjective("kills");
+    let scoreboardDeaths = getObjective("deaths");
+
+    // Since the leaderboard is sorted by K/D ratio; you need to have at least 20 kills to appear
+    // on the leaderboard so that players with 0 or 1 deaths can't reach Top 1 with just a few kills.
+
+    let playersSorted = allPlayers
+        .filter(player => getScore(scoreboardKills, player) >= 20)
+        .sort((player1, player2) => {
+            let kd1 = getKD(player1, {scoreboardKills: scoreboardKills, scoreboardDeaths: scoreboardDeaths});
+            let kd2 = getKD(player2, {scoreboardKills: scoreboardKills, scoreboardDeaths: scoreboardDeaths});
+            return (kd1 > kd2) ? -1 : 1;
+        })
+        .splice(-10, 10);
+
+
+    playersSorted.forEach((player, index) => {
+        scoreboardLeaderboard.setScore(player, index + 1);
+    })
+
+}, 500);
 
 
 log("§aPlugin loaded!")
