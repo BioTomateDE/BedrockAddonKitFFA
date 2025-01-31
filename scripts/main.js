@@ -25,6 +25,21 @@ function log(...args) {
 }
 
 
+// spawn joined players into lobby
+world.afterEvents.playerSpawn.subscribe(data => {
+    if (!data.initialSpawn) {
+        return;
+    }
+
+    // player just joined the game; move to spawn
+    data.player.runCommand("clear @s");
+    data.player.runCommand("effect @s clear");
+    data.player.removeTag("arena");
+    data.player.runCommand("tp @s 10000 -39 10000 -90 0");
+    data.player.runCommand("inputpermission set @s jump enabled");
+});
+
+
 // handle kill, death
 world.afterEvents.entityDie.subscribe(data => {
     if (data.deadEntity.typeId !== "minecraft:player") {
@@ -52,6 +67,7 @@ world.afterEvents.entityDie.subscribe(data => {
 });
 
 
+// increase playtime
 system.runInterval(() => {
     let scoreboardPlaytime = getObjective("playtime");
 
@@ -130,3 +146,6 @@ system.runInterval(() => {
 
 
 }, 10);
+
+
+log("§aPlugin loaded!")
