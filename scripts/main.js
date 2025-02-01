@@ -7,6 +7,18 @@ const admins = [
     "Tomatigga"
 ]
 
+const playerNameCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ()".split("");
+
+function commandifyPlayerName(nameRaw) {
+    if (!nameRaw.split("").every(ch => playerNameCharset.includes(ch))) {
+        return null;
+    }
+    if (nameRaw.split("").some(ch => ch === ' ')) {
+        return ' ' + nameRaw + ' ';
+    }
+    return nameRaw;
+}
+
 
 function getObjective(objectiveName, creationDisplayName=null) {
     let objective = world.scoreboard.getObjective(objectiveName);
@@ -132,7 +144,8 @@ world.afterEvents.entityDie.subscribe(data => {
 
     const attackerIsInArena = attacker.hasTag("arena");
     scoreboardKills.addScore(attacker, 1);
-    attacker.playSound("random.orb", {pitch: 2});
+    attacker.playSound("dig.snow", {pitch: 1});
+    attacker.playSound("break.amethyst_cluster", {pitch: 1.7});
 
     if (attackerIsInArena) {
         scoreboardKillstreak.addScore(attacker, 1);
@@ -234,7 +247,8 @@ system.runInterval(() => {
             player.onScreenDisplay.setActionBar(
                 `§2Kills§r: ${kills}§r\n` +
                 `§uKillstreak§r: ${killstreak}§r\n` +
-                `§ePlaytime§r: ${playtimeString}§r`
+                `§ePlaytime§r: ${playtimeString}§r\n` +
+                `§dOnline§r: ${onlineCount}§r`
             );
         } else {
             player.onScreenDisplay.setActionBar(
@@ -292,6 +306,16 @@ system.runInterval(() => {
         scoreboardLeaderboard.setScore(player, index + 1);
     })
 }, 500);
+
+
+// Kick banned players
+system.runInterval(() => {
+    world.getPlayers({tags: ["ban"]}).forEach(player => {
+        const banMessage = `§4You have been §mpermanently§4\nbanned from this world, loser!`;
+        const command = `kick ${commandifyPlayerName(player.name)} \n${banMessage}`;
+        world.getDimension("overworld").runCommand(command);
+    });
+}, 10);
 
 
 // Global variables
