@@ -105,37 +105,41 @@ world.afterEvents.entityDie.subscribe(data => {
     scoreboardKillstreak.setScore(data.deadEntity, 0);
 
     let attacker;
+    // Try to find a killer by finding the player who dealt the most damage to the victim
+    let attackersSorted = Object.entries(playerDamages[data.deadEntity.id])
+        .filter(([attacker, damage]) => damage >= 5)
+        .toSorted(([attacker1, damage1], [attacker2, damage2]) => damage1 > damage2 ? -1 : 1);
 
-    if (
-        data.damageSource?.damagingEntity === undefined ||
-        data.damageSource.damagingEntity.typeId !== "minecraft:player" ||
-        !data.damageSource.damagingEntity.isValid()
-    ) {
-        // try to still find a killer by finding the player who dealt the most damage to the victim
-        let attackersSorted = Object.entries(playerDamages[data.deadEntity.id])
-            .filter(([attacker, damage]) => damage >= 5)
-            .toSorted(([attacker1, damage1], [attacker2, damage2]) => damage1 > damage2 ? -1 : 1);
-
-        if (attackersSorted.length === 0) {
-            // no attacker with enough damage found
+    if (attackersSorted.length === 0) {
+        // No attacker with enough damage found, try to give the kill to the "actual" killer
+        if (
+            data.damageSource?.damagingEntity === undefined ||
+            data.damageSource.damagingEntity.typeId !== "minecraft:player" ||
+            !data.damageSource.damagingEntity.isValid()
+        ) {
             delete playerDamages[data.deadEntity.id];
             return;
         }
+        else {
+            attacker = data.damageSource.damagingEntity;
+        }
+    } else {
         let attackerID = attackersSorted[0][0];
         attacker = getPlayerByID(attackerID);
-    }
-    else {
-        attacker = data.damageSource.damagingEntity;
     }
 
     delete playerDamages[data.deadEntity.id];
 
+    const attackerIsInArena = attacker.hasTag("arena");
     scoreboardKills.addScore(attacker, 1);
-    scoreboardKillstreak.addScore(attacker, 1);
-    attacker.playSound("random.orb", {pitch: 2})
-    attacker.addEffect("absorption", 600, {amplifier: 0, showParticles: false});
-    attacker.addEffect("saturation", 20, {amplifier: 0, showParticles: true});
-    attacker.addEffect("regeneration", 100, {amplifier: 2, showParticles: true});
+    attacker.playSound("random.orb", {pitch: 2});
+
+    if (attackerIsInArena) {
+        scoreboardKillstreak.addScore(attacker, 1);
+        attacker.addEffect("absorption", 600, {amplifier: 0, showParticles: false});
+        attacker.addEffect("regeneration", 100, {amplifier: 2, showParticles: true});
+        attacker.addEffect("saturation", 20, {amplifier: 0, showParticles: true});
+    }
 });
 
 
