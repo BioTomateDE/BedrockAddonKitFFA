@@ -31,10 +31,22 @@ function getScore(objective, player) {
 }
 
 
+function getPlayerByID(playerID) {
+    // Find a player with the matching ID in the world
+    // If player is not found, return null.
+    const allPlayers = world.getAllPlayers();
+    const playersFiltered = allPlayers.filter(player => player.id === playerID);
+    if (playersFiltered.length === 0) {
+        return null;
+    }
+    return playersFiltered[0];
+}
+
+
 // useful for debugging without spamming everyone in the server
 function log(...args) {
     let players = world.getAllPlayers().filter(player => admins.includes(player.name));
-    players.forEach(player => player.sendMessage(String(...args)));
+    players.forEach(player => player.sendMessage(args.join(" ")));
 }
 
 
@@ -81,7 +93,7 @@ world.afterEvents.playerSpawn.subscribe(data => {
 
 // handle kill, death
 world.afterEvents.entityDie.subscribe(data => {
-    if (data.deadEntity.typeId !== "minecraft:player") {
+    if (data.deadEntity.typeId !== "minecraft:player" || !data.deadEntity.isValid()) {
         return;
     }
 
@@ -92,17 +104,74 @@ world.afterEvents.entityDie.subscribe(data => {
     scoreboardDeaths.addScore(data.deadEntity, 1);
     scoreboardKillstreak.setScore(data.deadEntity, 0);
 
-    if (data.damageSource?.damagingEntity === undefined || data.damageSource.damagingEntity.typeId !== "minecraft:player") {
-        return;
+    let attacker;
+
+    if (
+        data.damageSource?.damagingEntity === undefined ||
+        data.damageSource.damagingEntity.typeId !== "minecraft:player" ||
+        !data.damageSource.damagingEntity.isValid()
+    ) {
+        // try to still find a killer by finding the player who dealt the most damage to the victim
+        let attackersSorted = Object.entries(playerDamages[data.deadEntity.id])
+            .filter(([attacker, damage]) => damage >= 5)
+            .toSorted(([attacker1, damage1], [attacker2, damage2]) => damage1 > damage2 ? -1 : 1);
+
+        if (attackersSorted.length === 0) {
+            // no attacker with enough damage found
+            delete playerDamages[data.deadEntity.id];
+            return;
+        }
+        let attackerID = attackersSorted[0][0];
+        attacker = getPlayerByID(attackerID);
+    }
+    else {
+        attacker = data.damageSource.damagingEntity;
     }
 
-    let attacker = data.damageSource.damagingEntity;
+    delete playerDamages[data.deadEntity.id];
+
     scoreboardKills.addScore(attacker, 1);
     scoreboardKillstreak.addScore(attacker, 1);
     attacker.playSound("random.orb", {pitch: 2})
     attacker.addEffect("absorption", 600, {amplifier: 0, showParticles: false});
     attacker.addEffect("saturation", 20, {amplifier: 0, showParticles: true});
     attacker.addEffect("regeneration", 100, {amplifier: 2, showParticles: true});
+});
+
+
+// Keep track of player damages to determine who to award the kill if the death is indirect (fall damage, ender pearl damage, lava, fire, burning)
+world.afterEvents.entityHurt.subscribe(data => {
+    if (
+        data.hurtEntity.typeId !== "minecraft:player" ||
+        !data.hurtEntity.isValid() ||
+        data.damageSource?.damagingEntity === undefined ||
+        data.damageSource.damagingEntity.typeId !== "minecraft:player" ||
+        !data.damageSource.damagingEntity.isValid()
+    ) {
+        return;
+    }
+
+    const victimID = data.hurtEntity.id;
+    const attackerID = data.damageSource.damagingEntity.id;
+    const damageAmount = data.damage;
+
+    if (playerDamages[victimID] === undefined) {
+        playerDamages[victimID] = {attackerID: damageAmount};
+    }
+    else if (playerDamages[victimID][attackerID] === undefined) {
+        playerDamages[victimID][attackerID] = damageAmount
+    }
+    else {
+        playerDamages[victimID][attackerID] += damageAmount;
+    }
+
+    // log(data.hurtEntity.name, "was attacked by", data.damageSource.damagingEntity.name, "causing", damageAmount.toFixed(2), "damage.");
+    // log(JSON.stringify(playerDamages))
+});
+
+
+world.beforeEvents.playerLeave.subscribe(data => {
+    delete playerDamages[data.player.id];
 });
 
 
@@ -190,8 +259,6 @@ system.runInterval(() => {
 
         player.nameTag = `${nametagColor}${player.name}\n${deviceIcon}§iKD: ${kdString}§r`;
     })
-
-
 }, 10);
 
 
@@ -220,8 +287,13 @@ system.runInterval(() => {
     playersSorted.forEach((player, index) => {
         scoreboardLeaderboard.setScore(player, index + 1);
     })
-
 }, 500);
 
 
-log("§aPlugin loaded!")
+// Global variables
+
+// Dictionary<VictimPlayerID, Dictionary<AttackerPlayerID, DamageAmount>>
+let playerDamages = {}
+
+
+log("§aPlugin loaded!");
