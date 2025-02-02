@@ -168,6 +168,11 @@ world.afterEvents.entityHurt.subscribe(data => {
         return;
     }
 
+    // Bow hit confirmation sound
+    if (data.damageSource.damagingProjectile !== undefined && data.damageSource.damagingProjectile.typeId === "minecraft:arrow") {
+        data.damageSource.damagingEntity.playSound("random.orb", {pitch: 0.5});
+    }
+
     const victimID = data.hurtEntity.id;
     const attackerID = data.damageSource.damagingEntity.id;
     const damageAmount = data.damage;
@@ -261,7 +266,7 @@ system.runInterval(() => {
 
         let nametagColor = admins.includes(player.name) ? '§c' : '§e';
 
-        // Custom Emojis from "Crystal Mett" RP  (https://wiki.bedrock.dev/concepts/emojis)
+        // Custom Emojis from "Crystal Mett" Resource Pack  (https://wiki.bedrock.dev/concepts/emojis)
         let deviceIcon = '';
         switch (player.clientSystemInfo.platformType) {
             case PlatformType.Desktop:
@@ -271,7 +276,7 @@ system.runInterval(() => {
                 deviceIcon = '\uE1D1 ';
                 break;
             case PlatformType.Console:
-                deviceIcon = '\uE1D0 '
+                deviceIcon = '\uE1D0 ';
                 break;
         }
 
