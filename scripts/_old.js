@@ -62,3 +62,44 @@ for (let i = 0; i < 500; i++) {
 }
 log(dfs.join("\n \n"))
 
+
+
+
+// Prevent interacting with blocks (such as Crafting Tables, hidden Chests/Barrels/Dispensers)
+world.beforeEvents.playerInteractWithBlock.subscribe(data => {
+    log(data.player.isSneaking, data.block.typeId, data.blockFace, data.faceLocation.x.toFixed(2), data.faceLocation.y.toFixed(2), data.faceLocation.z.toFixed(2), data.isFirstEvent, data.itemStack?.typeId)
+
+    // `data.player.isSneaking` is delayed and therefore insecure.
+    if (data.player.isSneaking) return;
+    if (admins.includes(data.player.name)) return;
+
+    const forbiddenBlocks = [
+        "crafting_table",
+        "chest",
+        "trapped_chest",
+        "barrel",
+        "hopper",
+        "dropper",
+        "dispenser",
+        "furnace",
+        "blast_furnace",
+        "smoker",
+        "campfire",
+        "soul_campfire",
+        "brewing_stand",
+        "ender_chest",
+        "flower_pot",
+        "item_frame",
+        "jukebox",
+        "lectern",
+        "shulker_box",
+        "command_block",
+        "repeating_command_block",
+        "chain_command_block"
+    ]
+
+    if (forbiddenBlocks.some(forbiddenBlock => data.block.matches(forbiddenBlock))) {
+        data.cancel = true;
+    }
+});
+

@@ -7,7 +7,7 @@ import {
     TicksPerSecond,
     BlockVolume,
     Dimension,
-    GameMode
+    GameMode, HudVisibility, HudElement, EntityInitializationCause
 } from "@minecraft/server";
 
 const admins = [
@@ -167,6 +167,8 @@ function fillLayers(dimension, from, to, block, blockOptions = null) {
             {x: from.x, y: y, z: from.z},
             {x: to.x, y: y, z: to.z}
         );
+        log(JSON.stringify(volume))
+        console.log(volume)
         dimension.fillBlocks(volume, block, blockOptions);
     }
 }
@@ -418,9 +420,49 @@ world.afterEvents.entityHurt.subscribe(data => {
 });
 
 
+// Delete Player damages when attacker leaves world
 world.beforeEvents.playerLeave.subscribe(data => {
     delete playerDamages[data.player.id];
 });
+
+
+// Prevent placing boats
+world.beforeEvents.itemUseOn.subscribe(data => {
+    if (data.itemStack.type.id.includes("boat")) {
+        data.cancel = true;
+    }
+});
+
+
+// Item, arrow killer
+world.afterEvents.entitySpawn.subscribe(data => {
+    const typeID = data.entity.typeId;
+    const entityID = data.entity.id;
+    const now = new Date();
+
+    switch (typeID) {
+        case "minecraft:arrow":
+        case "minecraft:item":
+            entityTimestamps[entityID] = now;
+            break;
+    }
+});
+
+
+// Item, Arrow killer
+system.runInterval(() => {
+    const now = new Date();
+
+    Object.entries(entityTimestamps).forEach(([entityID, timestamp]) => {
+        let entity = world.getEntity(entityID);
+        if (!isValid(entity)) return;
+
+        if ((now - timestamp)/1000 < entityKillTimes[entity.typeId]) return;
+        delete entityTimestamps[entityID];
+        entity.kill();
+    });
+}, 10);
+
 
 
 // Increase Playtime
@@ -467,7 +509,7 @@ system.runInterval(() => {
 }, 2);
 
 
-// update actionbar and nametags
+// Update Actionbar, Nametags, HUD visibility
 system.runInterval(() => {
     let scoreboardPlaytime = getObjective("playtime");
     let scoreboardKills = getObjective("kills");
@@ -536,6 +578,11 @@ system.runInterval(() => {
         }
 
         player.nameTag = `${nametagColor}${player.name}\n${deviceIcon}§iKD: ${kdString}§r`;
+
+        player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, [HudElement.ItemText]);
+
+        // v  should be unnecessary if no player's spawnpoint is set (setworldspawn instead)
+        player.setSpawnPoint({dimension: world.getDimension("overworld"), x: 10000, y: -39, z: 10000});
     })
 }, 10);
 
@@ -596,6 +643,13 @@ system.runInterval(() => {
 }, 5 * 60 * TicksPerSecond);
 
 
+// Discord Message
+system.runInterval(() => {
+    world.sendMessage("§2Join the Discord for updates and hosting times or give us suggestions for kits: §5bit.ly/tomatigga§r");
+}, 3000);
+
+
+
 // Global variables
 const lobbyVolume = {
     from: {
@@ -639,7 +693,13 @@ const arenaVolume = {
 const kits = ["samurai", "sniper", "tank", "fighter", "maceling", "newgen"];
 
 
-let playerDamages = {};    // Dictionary<VictimPlayerID, Dictionary<AttackerPlayerID, DamageAmount>>
+let playerDamages = {};     // Dictionary<VictimPlayerID, Dictionary<AttackerPlayerID, DamageAmount>>
+
+let entityTimestamps = {}   // Dictionary<EntityID, SpawnTimestampUnix>
+const entityKillTimes = {
+    "minecraft:arrow": 5.0,
+    "minecraft:item": 25.0,
+};                              // Dictionary<EntityType, KillTimeSeconds>
 
 
 log("[§4KitFFA§r]§a Addon loaded!");
