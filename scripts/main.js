@@ -88,6 +88,33 @@ function getKD(player, options={}) {
 }
 
 
+function showKillstreakMessage(player, killstreak) {
+    const pluralSuffix = killstreak >= 2 ? "s" : "";
+
+    if (killstreak % 5 === 0) {
+        const message = `\n\n\n§b${killstreak}§s Kill${pluralSuffix}!`;
+        player.onScreenDisplay.setTitle("§§", {
+            subtitle: message,
+            fadeInDuration: 0,
+            stayDuration: 35,
+            fadeOutDuration: 7
+        });
+    } else {
+        const message = `\n\n\n§e${killstreak}§g Kill${pluralSuffix}!`;
+        player.onScreenDisplay.setTitle("§§", {
+            subtitle: message,
+            fadeInDuration: 0,
+            stayDuration: 15,
+            fadeOutDuration: 2
+        });
+    }
+
+    if (killstreak % 10 === 0) {
+        world.sendMessage(`§5${player.name}§d is on a killing spree!`);
+    }
+}
+
+
 // spawn joined players into lobby
 world.afterEvents.playerSpawn.subscribe(data => {
     if (!data.initialSpawn) {
@@ -111,7 +138,7 @@ world.afterEvents.entityDie.subscribe(data => {
 
     let scoreboardDeaths = getObjective("deaths");
     let scoreboardKills = getObjective("kills");
-    let scoreboardKillstreak = getObjective("kill_streak");
+    let scoreboardKillstreak = getObjective("killstreak");
 
     scoreboardDeaths.addScore(data.deadEntity, 1);
     scoreboardKillstreak.setScore(data.deadEntity, 0);
@@ -149,6 +176,7 @@ world.afterEvents.entityDie.subscribe(data => {
 
     if (attackerIsInArena) {
         scoreboardKillstreak.addScore(attacker, 1);
+        showKillstreakMessage(attacker, scoreboardKillstreak.getScore(attacker));
         attacker.addEffect("absorption", 600, {amplifier: 0, showParticles: false});
         attacker.addEffect("regeneration", 100, {amplifier: 2, showParticles: true});
         attacker.addEffect("saturation", 20, {amplifier: 0, showParticles: true});
@@ -168,27 +196,38 @@ world.afterEvents.entityHurt.subscribe(data => {
         return;
     }
 
-    // Bow hit confirmation sound
-    if (data.damageSource.damagingProjectile !== undefined && data.damageSource.damagingProjectile.typeId === "minecraft:arrow") {
-        data.damageSource.damagingEntity.playSound("random.orb", {pitch: 0.5});
-    }
-
-    const victimID = data.hurtEntity.id;
-    const attackerID = data.damageSource.damagingEntity.id;
+    const victim = data.hurtEntity;
+    const attacker = data.damageSource.damagingEntity;
     const damageAmount = data.damage;
 
-    if (playerDamages[victimID] === undefined) {
-        playerDamages[victimID] = {attackerID: damageAmount};
-    }
-    else if (playerDamages[victimID][attackerID] === undefined) {
-        playerDamages[victimID][attackerID] = damageAmount
-    }
-    else {
-        playerDamages[victimID][attackerID] += damageAmount;
+    // Bow hit confirmation sound
+    if (data.damageSource.damagingProjectile !== undefined) {
+        switch (data.damageSource.damagingProjectile.typeId) {
+            case "minecraft:arrow":
+                attacker.playSound("random.orb", {pitch: 0.5});
+                break;
+            case "minecraft:snowball":
+                attacker.playSound("random.orb", {pitch: 1.0});
+                break;
+            case "minecraft:fishing_hook":
+                attacker.playSound("random.bow", {pitch: 2.0});
+                break;
+        }
     }
 
-    // log(data.hurtEntity.name, "was attacked by", data.damageSource.damagingEntity.name, "causing", damageAmount.toFixed(2), "damage.");
-    // log(JSON.stringify(playerDamages))
+    // Save the cumulative damages for determining kills later
+    if (playerDamages[victim.id] === undefined) {
+        playerDamages[victim.id] = {attackerID: damageAmount};
+    }
+    else if (playerDamages[victim.id][attacker.id] === undefined) {
+        playerDamages[victim.id][attacker.id] = damageAmount
+    }
+    else {
+        playerDamages[victim.id][attacker.id] += damageAmount;
+    }
+
+    // log(victim.name, "was attacked by", attacker.name, "causing", damageAmount.toFixed(2), "damage.");
+    // log(JSON.stringify(playerDamages));
 });
 
 
@@ -213,7 +252,6 @@ system.runInterval(() => {
     let scoreboardPlaytime = getObjective("playtime");
     let scoreboardKills = getObjective("kills");
     let scoreboardDeaths = getObjective("deaths");
-    let scoreboardKillstreak = getObjective("kill_streak");
 
     let allPlayers = world.getAllPlayers();
     let onlineCount = allPlayers.length;
@@ -225,8 +263,6 @@ system.runInterval(() => {
         if (player.typeId !== "minecraft:player") {
             return;
         }
-
-        let killstreak = getScore(scoreboardKillstreak, player);
 
         let kills = getScore(scoreboardKills, player);
         let deaths = getScore(scoreboardDeaths, player);
@@ -250,8 +286,7 @@ system.runInterval(() => {
 
         if (isArena) {
             player.onScreenDisplay.setActionBar(
-                `§2Kills§r: ${kills}§r\n` +
-                `§uKillstreak§r: ${killstreak}§r\n` +
+                `§2Kills§r: ${kills}§r §i|§r §bKD§r: ${kdString}§r\n` +
                 `§ePlaytime§r: ${playtimeString}§r\n` +
                 `§dOnline§r: ${onlineCount}§r`
             );
@@ -329,4 +364,4 @@ system.runInterval(() => {
 let playerDamages = {}
 
 
-log("§aPlugin loaded!");
+log("[§4KitFFA§r]§a Addon loaded!");
