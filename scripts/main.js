@@ -1,4 +1,14 @@
-import {world, system, Player, Entity, PlatformType, TicksPerSecond, BlockVolume, Dimension} from "@minecraft/server";
+import {
+    world,
+    system,
+    Player,
+    Entity,
+    PlatformType,
+    TicksPerSecond,
+    BlockVolume,
+    Dimension,
+    GameMode
+} from "@minecraft/server";
 
 const admins = [
     "BioTomateDE",
@@ -34,6 +44,19 @@ function commandifyPlayerName(nameRaw) {
         return ' ' + nameRaw + ' ';
     }
     return nameRaw;
+}
+
+
+function isPointInsideVolume(volume, point) {
+    if (point.x < volume.from.x) return false;
+    if (point.y < volume.from.y) return false;
+    if (point.z < volume.from.z) return false;
+
+    if (point.x > volume.to.x) return false;
+    if (point.y > volume.to.y) return false;
+    if (point.z > volume.to.z) return false;
+
+    return true;
 }
 
 
@@ -153,58 +176,51 @@ function clearArena() {
     world.sendMessage("§aClearing Arena...");
     const dimension = world.getDimension("overworld");
 
-    const arenaX1 = Math.floor(arenaCenterX - arenaWidthX / 2);
-    const arenaX2 = Math.floor(arenaCenterX + arenaWidthX / 2);
-    const arenaZ1 = Math.floor(arenaCenterZ - arenaWidthZ / 2);
-    const arenaZ2 = Math.floor(arenaCenterZ + arenaWidthZ / 2);
-    const arenaY1 = Math.floor(arenaBottomY);
-    const arenaY2 = Math.floor(arenaBottomY + arenaHeightY);
-
     const groundFrom = {
-        x: arenaX1 + 1,
-        y: arenaY1,
-        z: arenaX1 + 1
+        x: arenaVolume.from.x + 1,
+        y: arenaVolume.from.y,
+        z: arenaVolume.from.x + 1
     }
     const groundTo = {
-        x: arenaX2 - 1,
-        y: arenaY1,
-        z: arenaZ2 - 1
+        x: arenaVolume.to.x - 1,
+        y: arenaVolume.from.y,
+        z: arenaVolume.to.z - 1
     }
     fillLayers(dimension, groundFrom, groundTo, "minecraft:allow");
 
     const dirtFrom = {
-        x: arenaX1 + 1,
-        y: arenaY1 + 1,
-        z: arenaX1 + 1
+        x: arenaVolume.from.x + 1,
+        y: arenaVolume.from.y + 1,
+        z: arenaVolume.from.x + 1
     }
     const dirtTo = {
-        x: arenaX2 - 1,
-        y: arenaY1 + 2,
-        z: arenaZ2 - 1
+        x: arenaVolume.to.x - 1,
+        y: arenaVolume.from.y + 2,
+        z: arenaVolume.to.z - 1
     }
     fillLayers(dimension, dirtFrom, dirtTo, "minecraft:dirt");
 
     const grassFrom = {
-        x: arenaX1 + 1,
-        y: arenaY1 + 3,
-        z: arenaX1 + 1
+        x: arenaVolume.from.x + 1,
+        y: arenaVolume.from.y + 3,
+        z: arenaVolume.from.x + 1
     }
     const grassTo = {
-        x: arenaX2 - 1,
-        y: arenaY1 + 3,
-        z: arenaZ2 - 1
+        x: arenaVolume.to.x - 1,
+        y: arenaVolume.from.y + 3,
+        z: arenaVolume.to.z - 1
     }
     fillLayers(dimension, grassFrom, grassTo, "minecraft:grass_block");
 
     const airFrom = {
-        x: arenaX1 + 1,
-        y: arenaY1 + 4,
-        z: arenaZ1 + 1
+        x: arenaVolume.from.x + 1,
+        y: arenaVolume.from.y + 4,
+        z: arenaVolume.from.z + 1
     }
     const airTo = {
-        x: arenaX2 - 1,
-        y: arenaY2,    // -0 instead of -1 because the waterlogged barries don't get replaced otherwise
-        z: arenaZ2 - 1
+        x: arenaVolume.to.x - 1,
+        y: arenaVolume.to.y,    // -0 instead of -1 because the waterlogged barries don't get replaced otherwise
+        z: arenaVolume.to.z - 1
     }
     fillLayers(dimension, airFrom, airTo, "minecraft:air");
     // v this does what the fix above SHOULD'VE done, but for some fucking reason it doesn't work otherwise
@@ -212,70 +228,70 @@ function clearArena() {
 
     const volumeRoof = new BlockVolume(
         {
-            x: arenaX1,
-            y: arenaY2,
-            z: arenaZ1
+            x: arenaVolume.from.x,
+            y: arenaVolume.to.y,
+            z: arenaVolume.from.z
         },
         {
-            x: arenaX2,
-            y: arenaY2,
-            z: arenaZ2
+            x: arenaVolume.to.x,
+            y: arenaVolume.to.y,
+            z: arenaVolume.to.z
         }
     );
     dimension.fillBlocks(volumeRoof, "minecraft:barrier");
 
     const volumeWallX1 = new BlockVolume(
         {
-            x: arenaX1,
-            y: arenaY1,
-            z: arenaZ1
+            x: arenaVolume.from.x,
+            y: arenaVolume.from.y,
+            z: arenaVolume.from.z
         },
         {
-            x: arenaX1,
-            y: arenaY2 - 1,
-            z: arenaZ2
+            x: arenaVolume.from.x,
+            y: arenaVolume.to.y - 1,
+            z: arenaVolume.to.z
         }
     );
     dimension.fillBlocks(volumeWallX1, "minecraft:bedrock");
 
     const volumeWallX2 = new BlockVolume(
         {
-            x: arenaX2,
-            y: arenaY1,
-            z: arenaZ1
+            x: arenaVolume.to.x,
+            y: arenaVolume.from.y,
+            z: arenaVolume.from.z
         },
         {
-            x: arenaX2,
-            y: arenaY2 - 1,
-            z: arenaZ2
+            x: arenaVolume.to.x,
+            y: arenaVolume.to.y - 1,
+            z: arenaVolume.to.z
         }
     );
     dimension.fillBlocks(volumeWallX2, "minecraft:bedrock");
 
     const volumeWallZ1 = new BlockVolume(
         {
-            x: arenaX1,
-            y: arenaY1,
-            z: arenaZ1
+            x: arenaVolume.from.x,
+            y: arenaVolume.from.y,
+            z: arenaVolume.from.z
         },
         {
-            x: arenaX2,
-            y: arenaY2 - 1,
-            z: arenaZ1
+            x: arenaVolume.to.x,
+            y: arenaVolume.to.y - 1,
+            z: arenaVolume.from.z
         }
     );
     dimension.fillBlocks(volumeWallZ1, "minecraft:bedrock");
 
     const volumeWallZ2 = new BlockVolume(
         {
-            x: arenaX1,
-            y: arenaY1,
-            z: arenaZ2
+            x: arenaVolume.from.x,
+            y: arenaVolume.from.y,
+            z: arenaVolume.to.z
         },
         {
-            x: arenaX2,
-            y: arenaY2 - 1,
-            z: arenaZ2
+            x: arenaVolume.to.x,
+            y: arenaVolume.to.y - 1,
+            z: arenaVolume.to.z
         }
     );
     dimension.fillBlocks(volumeWallZ2, "minecraft:bedrock");
@@ -283,14 +299,14 @@ function clearArena() {
 
     // extra air on top of the arena
     const airOnRoofFrom = {
-        x: arenaX1,
-        y: arenaY2 + 1,
-        z: arenaZ1
+        x: arenaVolume.from.x,
+        y: arenaVolume.to.y + 1,
+        z: arenaVolume.from.z
     }
     const airOnRoofTo = {
-        x: arenaX2,
-        y: arenaY2 + 6,
-        z: arenaZ2
+        x: arenaVolume.to.x,
+        y: arenaVolume.to.y + 6,
+        z: arenaVolume.to.z
     }
     fillLayers(dimension, airOnRoofFrom, airOnRoofTo, "minecraft:air");
 
@@ -407,15 +423,48 @@ world.beforeEvents.playerLeave.subscribe(data => {
 });
 
 
-// increase playtime
+// Increase Playtime
 system.runInterval(() => {
     let scoreboardPlaytime = getObjective("playtime");
 
-    world.getAllPlayers().forEach((player) => {
+    world.getAllPlayers().forEach(player => {
         scoreboardPlaytime.addScore(player, 1);
-    })
-
+    });
 }, 1);
+
+
+// Effects, location based stuff
+system.runInterval(() => {
+    world.getAllPlayers().forEach(player => {
+        if (!player.isValid()) return;
+
+        player.addEffect("night_vision", 20_000_000, {showParticles: false});
+
+        const inLobby = isPointInsideVolume(lobbyVolume, player.location);
+        const inPreArena = isPointInsideVolume(preArenaVolume, player.location);
+        const inArena = isPointInsideVolume(arenaVolume, player.location);
+
+        if (!inArena) {
+            kits.forEach(kit => player.removeTag(`kit_${kit}`));
+        }
+
+        if (inLobby) {
+            if (![GameMode.creative, GameMode.spectator].includes(player.getGameMode())) {
+                player.runCommand("clear");
+            }
+        }
+
+        if (inLobby || inPreArena) {
+            if (!admins.includes(player.name)) {
+                player.setGameMode(GameMode.adventure);
+            }
+
+            player.addEffect("saturation", 60, {showParticles: false});
+            player.addEffect("resistance", 60, {showParticles: false});
+            player.addEffect("instant_health", 60, {showParticles: false});
+        }
+    })
+}, 2);
 
 
 // update actionbar and nametags
@@ -548,12 +597,47 @@ system.runInterval(() => {
 
 
 // Global variables
-const arenaCenterX = 20000;
-const arenaWidthX = 180;
-const arenaCenterZ = 20000;
-const arenaWidthZ = 180;
-const arenaBottomY = -64;
-const arenaHeightY = 25;
+const lobbyVolume = {
+    from: {
+        x: 9990,
+        y: -40,
+        z: 9990
+    },
+    to: {
+        x: 10010,
+        y: -28,
+        z: 10010
+    }
+}
+
+const preArenaVolume = {
+    from: {
+        x: 9992,
+        y: -1,
+        z: 9994
+    },
+    to: {
+        x: 10008,
+        y: 5,
+        z: 10009
+    }
+}
+
+const arenaVolume = {
+    from: {
+        x: 19810,
+        y: -64,
+        z: 19810
+    },
+    to: {
+        x: 20090,
+        y: -39,
+        z: 20090
+    }
+}
+
+const kits = ["samurai", "sniper", "tank", "fighter", "maceling", "newgen"];
+
 
 let playerDamages = {};    // Dictionary<VictimPlayerID, Dictionary<AttackerPlayerID, DamageAmount>>
 
