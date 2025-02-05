@@ -1,0 +1,196 @@
+{
+    "pools": [
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:diamond_sword",
+                    "functions": [
+                        {
+                            "function": "specific_enchants",
+                            "enchants": [
+                                {
+                                    "id": "sharpness",
+                                    "level": 1
+                                },
+                                {
+                                    "id": "unbreaking",
+                                    "level": 3
+                                },
+                                {
+                                    "id": "vanishing",
+                                    "level": 1
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:pale_oak_planks",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 32
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:fishing_rod",
+                    "functions": [
+                        {
+                            "function": "specific_enchants",
+                            "enchants": [
+                                {
+                                    "id": "unbreaking",
+                                    "level": 3
+                                },
+                                {
+                                    "id": "vanishing",
+                                    "level": 1
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:web",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 5
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:golden_apple",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 3
+                        },
+                        {
+                            "function": "specific_enchants",
+                            "enchants": [
+                                {
+                                    "id": "vanishing",
+                                    "level": 1
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:crossbow",
+                    "functions": [
+                        {
+                            "function": "specific_enchants",
+                            "enchants": [
+                                {
+                                    "id": "quick_charge",
+                                    "level": 2
+                                },
+                                {
+                                    "id": "piercing",
+                                    "level": 4
+                                },
+                                {
+                                    "id": "unbreaking",
+                                    "level": 3
+                                },
+                                {
+                                    "id": "vanishing",
+                                    "level": 1
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:cooked_chicken",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 16
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:ender_pearl",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 1
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:powder_snow_bucket"
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:arrow",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 20
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

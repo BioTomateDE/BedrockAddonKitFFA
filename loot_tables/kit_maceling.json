@@ -1,0 +1,153 @@
+{
+    "pools": [
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:trident",
+                    "functions": [
+                        {
+                            "function": "specific_enchants",
+                            "enchants": [
+                                {
+                                    "id": "loyalty",
+                                    "level": 3
+                                },
+                                {
+                                    "id": "unbreaking",
+                                    "level": 3
+                                },
+                                {
+                                    "id": "vanishing",
+                                    "level": 1
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:pale_oak_planks",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 64
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:water_bucket"
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:flint_and_steel",
+                    "functions": [
+                        {
+                            "function": "specific_enchants",
+                            "enchants": [
+                                {
+                                    "id": "vanishing",
+                                    "level": 1
+                                }
+                            ]
+                        },
+                        {
+                            "function": "set_damage",
+                            "damage": 0.2
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:mace",
+                    "functions": [
+                        {
+                            "function": "specific_enchants",
+                            "enchants": [
+                                {
+                                    "id": "wind_burst",
+                                    "level": 1
+                                },
+                                {
+                                    "id": "unbreaking",
+                                    "level": 3
+                                },
+                                {
+                                    "id": "vanishing",
+                                    "level": 1
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:wind_charge",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 48
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:cooked_chicken",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 16
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "rolls": 1,
+            "entries": [
+                {
+                    "type": "item",
+                    "name": "minecraft:ender_pearl",
+                    "functions": [
+                        {
+                            "function": "set_count",
+                            "count": 2
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
