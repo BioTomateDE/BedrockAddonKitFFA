@@ -7,36 +7,55 @@ import {
     TicksPerSecond,
     BlockVolume,
     Dimension,
-    GameMode, HudVisibility, HudElement, EntityInitializationCause, EntityComponentTypes
+    GameMode,
+    HudVisibility,
+    HudElement,
+    ScoreboardObjective,
+    BlockPermutation, BlockType, BlockFillOptions, DimensionLocation
 } from "@minecraft/server";
-
-const admins = [
-    "BioTomateDE",
-    "HeiligTomate",
-    "latuskati",
-    "Tomatigga"
-]
-
-const playerNameCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ()".split("");
+// import * as diagnostics_channel from "node:diagnostics_channel";
 
 
-function isValid(value) {
-    if (value === undefined || typeof value === 'undefined') return false;
-    if (value === null) return false;
-    if (typeof value === 'number' && (isNaN(value) || !isFinite(value))) return false;
-    return true;
+interface IPoint {
+    x: number,
+    y: number,
+    z: number
+}
+
+interface IVolume {
+    from: IPoint,
+    to: IPoint
+}
+
+interface ICuboid {
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number
 }
 
 
-function isValidPlayer(entity) {
-    if (!isValid(entity)) return false;
+// function isValid(value: any): boolean {
+//     if (value === undefined || typeof value === 'undefined') return false;
+//     if (value === null) return false;
+//     if (value instanceof Number && (isNaN(value as number) || !isFinite(value as number))) return false;
+//     return true;
+// }
+
+
+function isValidPlayer(entity: Entity): boolean {
+    if (entity === null) return false;
+    if (entity === undefined) return false;
     if (entity.typeId !== "minecraft:player") return false;
-    if (!entity.isValid()) return false;
+    if (!(entity instanceof Player)) return false;
+    if (!entity.isValid) return false;
     return true;
 }
 
 
-function commandifyPlayerName(nameRaw) {
+function commandifyPlayerName(nameRaw: string): string {
     if (!nameRaw.split("").every(ch => playerNameCharset.includes(ch))) {
         return null;
     }
@@ -47,7 +66,7 @@ function commandifyPlayerName(nameRaw) {
 }
 
 
-function isPointInsideVolume(volume, point) {
+function isPointInsideVolume(volume: IVolume, point: IPoint): boolean {
     if (point.x < volume.from.x) return false;
     if (point.y < volume.from.y) return false;
     if (point.z < volume.from.z) return false;
@@ -60,13 +79,13 @@ function isPointInsideVolume(volume, point) {
 }
 
 
-function getObjective(objectiveName, creationDisplayName = null) {
-    let objective = world.scoreboard.getObjective(objectiveName);
-    if (isValid(objective)) {
+function getObjective(objectiveName: string, creationDisplayName?: string): ScoreboardObjective {
+    let objective: ScoreboardObjective = world.scoreboard.getObjective(objectiveName);
+    if (objective !== undefined) {
         return objective;
     }
     world.sendMessage(`[§gWARN§r] Creating objective "${objectiveName}" since it didn't exist!`);
-    let objectiveDisplayName = objectiveName;
+    let objectiveDisplayName: string = objectiveName;
     if (creationDisplayName !== null) {
         objectiveDisplayName = creationDisplayName;
     }
@@ -74,19 +93,19 @@ function getObjective(objectiveName, creationDisplayName = null) {
 }
 
 
-function getScore(objective, player) {
-    let score = objective.getScore(player);
-    if (!isValid(score)) {
+function getScore(objective: ScoreboardObjective, player: Player): number {
+    let score: number = objective.getScore(player);
+    if (score === undefined) {
         score = 0;
     }
     return score;
 }
 
 
-function getPlayerByID(playerID) {
+function getPlayerByID(playerID: string): Player | null {
     // Find a player with the matching ID in the world
     // If player is not found, return null.
-    const allPlayers = world.getAllPlayers();
+    const allPlayers = overworld.getPlayers();
     const playersFiltered = allPlayers.filter(player => player.id === playerID);
     if (playersFiltered.length === 0) {
         return null;
@@ -96,15 +115,15 @@ function getPlayerByID(playerID) {
 
 
 // useful for debugging without spamming everyone in the server
-function log(...args) {
-    let players = world.getAllPlayers().filter(player => admins.includes(player.name));
+function log(...args: any[]): void {
+    let players: Player[] = overworld.getPlayers().filter(player => admins.includes(player.name));
     players.forEach(player => player.sendMessage(args.join(" ")));
 }
 
 
-function sendSubtitle(message, fadeIn, stay, fadeOut, players = null) {
+function sendSubtitle(message: string, fadeIn: number, stay: number, fadeOut: number, players?: Player[]): void {
     if (players === null) {
-        players = world.getAllPlayers();
+        players = overworld.getPlayers();
     }
 
     players.forEach(player => {
@@ -118,7 +137,7 @@ function sendSubtitle(message, fadeIn, stay, fadeOut, players = null) {
 }
 
 
-function moveToSpawn(player) {
+function moveToSpawn(player: Player): void {
     player.runCommand("clear @s");
     player.runCommand("effect @s clear");
     player.runCommand("tp @s 10000 -39 10000 -90 0");
@@ -126,33 +145,41 @@ function moveToSpawn(player) {
 }
 
 
-function getKD(player, options = {}) {
-    let scoreboardKills = options['scoreboardKills'];
-    let scoreboardDeaths = options['scoreboardDeaths'];
-    let kills = options['kills'];
-    let deaths = options['deaths'];
+function getKD(
+    player: Player,
+    options: {
+        'scoreboardKills'?: ScoreboardObjective,
+        'scoreboardDeaths'?: ScoreboardObjective,
+        'kills'?: number,
+        'deaths'?: number
+    } = {}
+): number {
+    let scoreboardKills: ScoreboardObjective = options['scoreboardKills'];
+    let scoreboardDeaths: ScoreboardObjective = options['scoreboardDeaths'];
+    let kills: number = options['kills'];
+    let deaths: number = options['deaths'];
 
-    if (!isValid(kills)) {
-        if (!isValid(scoreboardKills)) {
+    if (kills === null) {
+        if (scoreboardKills === null) {
             scoreboardKills = getObjective("kills");
         }
         kills = getScore(scoreboardKills, player);
     }
 
-    if (!isValid(deaths)) {
-        if (!isValid(scoreboardDeaths)) {
+    if (deaths === null) {
+        if (scoreboardDeaths === null) {
             scoreboardDeaths = getObjective("deaths");
         }
         deaths = getScore(scoreboardDeaths, player);
     }
 
     deaths = deaths === 0 ? 1 : deaths;    // prevent zero division
-    let kdRatio = kills / deaths;
+    let kdRatio: number = kills / deaths;
     return kdRatio;
 }
 
 
-function showKillstreakMessage(player, killstreak) {
+function showKillstreakMessage(player: Player, killstreak: number): void {
     const pluralSuffix = killstreak >= 2 ? "s" : "";
 
     if (killstreak % 5 === 0) {
@@ -167,214 +194,235 @@ function showKillstreakMessage(player, killstreak) {
 }
 
 
-function generateCuboids(W, H, D, C) {
-    const cuboids = [];
+function generateCuboids(bigCuboid: ICuboid, volumeLimit: number) {
+    const cuboids: ICuboid[] = [];
 
-    function splitCuboid(x, y, z, width, height, depth) {
-        const volume = width * height * depth;
+    function splitCuboid(cuboid: ICuboid): void {
+        const volume = cuboid.w * cuboid.h * cuboid.d;
 
         // Base Case: If the volume is within the limit, add cuboid
-        if (volume <= C) {
-            cuboids.push({x, y, z, width, height, depth});
+        if (volume <= volumeLimit) {
+            cuboids.push(cuboid);
             return;
         }
 
         // Find the longest dimension to split
-        if (width >= height && width >= depth) {
+        if (cuboid.w >= cuboid.h && cuboid.w >= cuboid.d) {
             // Split along width
-            let maxW = Math.min(width, Math.floor(C / (height * depth)));
+            let maxW = Math.min(cuboid.w, Math.floor(volumeLimit / (cuboid.h * cuboid.d)));
             if (maxW === 0) maxW = 1; // Ensure progress
-            splitCuboid(x, y, z, maxW, height, depth);
-            splitCuboid(x + maxW, y, z, width - maxW, height, depth);
-        } else if (height >= width && height >= depth) {
+            splitCuboid({x: cuboid.x, y: cuboid.y, z: cuboid.z, w: maxW, h: cuboid.h, d: cuboid.d});
+            splitCuboid({x: cuboid.x + maxW, y: cuboid.y, z: cuboid.z, w: cuboid.w - maxW, h: cuboid.h, d: cuboid.d});
+        } else if (cuboid.h >= cuboid.w && cuboid.h >= cuboid.d) {
             // Split along height
-            let maxH = Math.min(height, Math.floor(C / (width * depth)));
+            let maxH = Math.min(cuboid.h, Math.floor(volumeLimit / (cuboid.w * cuboid.d)));
             if (maxH === 0) maxH = 1;
-            splitCuboid(x, y, z, width, maxH, depth);
-            splitCuboid(x, y + maxH, z, width, height - maxH, depth);
+            splitCuboid({x: cuboid.x, y: cuboid.y, z: cuboid.z, w: cuboid.w, h: maxH, d: cuboid.d});
+            splitCuboid({x: cuboid.x, y: cuboid.y + maxH, z: cuboid.z, w: cuboid.w, h: cuboid.h - maxH, d: cuboid.d});
         } else {
             // Split along depth
-            let maxD = Math.min(depth, Math.floor(C / (width * height)));
+            let maxD = Math.min(cuboid.d, Math.floor(volumeLimit / (cuboid.w * cuboid.h)));
             if (maxD === 0) maxD = 1;
-            splitCuboid(x, y, z, width, height, maxD);
-            splitCuboid(x, y, z + maxD, width, height, depth - maxD);
+            splitCuboid({x: cuboid.x, y: cuboid.y, z: cuboid.z, w: cuboid.w, h: cuboid.h, d: maxD});
+            splitCuboid({x: cuboid.x, y: cuboid.y, z: cuboid.z + maxD, w: cuboid.w, h: cuboid.h, d: cuboid.d - maxD});
         }
     }
 
     // Start with the full cuboid at origin (0, 0, 0)
-    splitCuboid(0, 0, 0, W, H, D);
+    splitCuboid({x: 0, y: 0, z: 0, w: bigCuboid.w, h: bigCuboid.h, d: bigCuboid.d});
     return cuboids;
 }
 
 
-function fillBlocks(dimension, from, to, block, options = {}) {
+function fillBlocks(dimension: Dimension, volume: IVolume, block: BlockPermutation | BlockType | string, options?: BlockFillOptions): void {
     // Fills blocks while bypassing the 32768 block limit
 
-    const normalizedVolume = {
-        x: 1 + to.x - from.x,
-        y: 1 + to.y - from.y,
-        z: 1 + to.z - from.z
+    const bigCuboid: ICuboid = {
+        x: 0, y: 0, z: 0,
+        w: 1 + volume.to.x - volume.from.x,
+        h: 1 + volume.to.y - volume.from.y,
+        d: 1 + volume.to.z - volume.from.z
     };
 
-    const normalizedCuboids = generateCuboids(normalizedVolume.x, normalizedVolume.y, normalizedVolume.z, 32768);
+    const normalizedCuboids: ICuboid[] = generateCuboids(bigCuboid, 32768);
     normalizedCuboids.forEach(normalizedCuboid => {
-
-        const cuboidPositionFrom = {
-            x: from.x + normalizedCuboid.x,
-            y: from.y + normalizedCuboid.y,
-            z: from.z + normalizedCuboid.z
+        const cuboidPositionFrom: IPoint = {
+            x: volume.from.x + normalizedCuboid.x,
+            y: volume.from.y + normalizedCuboid.y,
+            z: volume.from.z + normalizedCuboid.z
         }
 
-        const cuboidPositionTo = {
-            x: cuboidPositionFrom.x + normalizedCuboid.width - 1,
-            y: cuboidPositionFrom.y + normalizedCuboid.height - 1,
-            z: cuboidPositionFrom.z + normalizedCuboid.depth - 1
+        const cuboidPositionTo: IPoint = {
+            x: cuboidPositionFrom.x + normalizedCuboid.w - 1,
+            y: cuboidPositionFrom.y + normalizedCuboid.h - 1,
+            z: cuboidPositionFrom.z + normalizedCuboid.d - 1
         }
 
-        const volume = new BlockVolume(cuboidPositionFrom, cuboidPositionTo);
-        dimension.fillBlocks(volume, block, options);
+        const blockVolume = new BlockVolume(cuboidPositionFrom, cuboidPositionTo);
+        dimension.fillBlocks(blockVolume, block, options);
     });
 }
 
 
-function clearArena() {
+function clearArena(): void {
     world.sendMessage("§aClearing Arena...");
 
-    const groundFrom = {
-        x: arenaVolume.from.x + 1,
-        y: arenaVolume.from.y,
-        z: arenaVolume.from.x + 1
+    const groundVolume: IVolume = {
+        from: {
+            x: arenaVolume.from.x + 1,
+            y: arenaVolume.from.y,
+            z: arenaVolume.from.x + 1
+        },
+        to: {
+            x: arenaVolume.to.x - 1,
+            y: arenaVolume.from.y,
+            z: arenaVolume.to.z - 1
+        }
     }
-    const groundTo = {
-        x: arenaVolume.to.x - 1,
-        y: arenaVolume.from.y,
-        z: arenaVolume.to.z - 1
-    }
-    fillBlocks(overworld, groundFrom, groundTo, "minecraft:allow");
+    fillBlocks(overworld, groundVolume, "minecraft:allow");
 
-    const dirtFrom = {
-        x: arenaVolume.from.x + 1,
-        y: arenaVolume.from.y + 1,
-        z: arenaVolume.from.x + 1
-    }
-    const dirtTo = {
-        x: arenaVolume.to.x - 1,
-        y: arenaVolume.from.y + 2,
-        z: arenaVolume.to.z - 1
-    }
-    fillBlocks(overworld, dirtFrom, dirtTo, "minecraft:dirt");
-
-    const grassFrom = {
-        x: arenaVolume.from.x + 1,
-        y: arenaVolume.from.y + 3,
-        z: arenaVolume.from.x + 1
-    }
-    const grassTo = {
-        x: arenaVolume.to.x - 1,
-        y: arenaVolume.from.y + 3,
-        z: arenaVolume.to.z - 1
-    }
-    fillBlocks(overworld, grassFrom, grassTo, "minecraft:grass_block");
-
-    const airFrom = {
-        x: arenaVolume.from.x + 1,
-        y: arenaVolume.from.y + 4,
-        z: arenaVolume.from.z + 1
-    }
-    const airTo = {
-        x: arenaVolume.to.x - 1,
-        y: arenaVolume.to.y,    // -0 instead of -1 because the waterlogged barries don't get replaced otherwise
-        z: arenaVolume.to.z - 1
-    }
-    fillBlocks(overworld, airFrom, airTo, "minecraft:air");
-    // v this does what the fix above SHOULD'VE done, but for some fucking reason it doesn't work otherwise
-    fillBlocks(overworld, airFrom, airTo, "minecraft:air");
-
-    const roofFrom = {
-        x: arenaVolume.from.x,
-        y: arenaVolume.to.y,
-        z: arenaVolume.from.z
-    }
-    const roofTo = {
-        x: arenaVolume.to.x,
-        y: arenaVolume.to.y,
-        z: arenaVolume.to.z
-    }
-    fillBlocks(overworld, roofFrom, roofTo, "minecraft:barrier");
-
-    const wallX1From = {
-        x: arenaVolume.from.x,
-        y: arenaVolume.from.y,
-        z: arenaVolume.from.z
+    const dirtVolume: IVolume = {
+        from: {
+            x: arenaVolume.from.x + 1,
+            y: arenaVolume.from.y + 1,
+            z: arenaVolume.from.x + 1
+        },
+        to: {
+            x: arenaVolume.to.x - 1,
+            y: arenaVolume.from.y + 2,
+            z: arenaVolume.to.z - 1
+        }
     };
-    const wallX1To = {
-        x: arenaVolume.from.x,
-        y: arenaVolume.to.y - 1,
-        z: arenaVolume.to.z
-    };
-    fillBlocks(overworld, wallX1From, wallX1To, "minecraft:bedrock");
+    fillBlocks(overworld, dirtVolume, "minecraft:dirt");
 
-    const wallX2From = {
-        x: arenaVolume.to.x,
-        y: arenaVolume.from.y,
-        z: arenaVolume.from.z
+    const grassVolume: IVolume = {
+        from: {
+            x: arenaVolume.from.x + 1,
+            y: arenaVolume.from.y + 3,
+            z: arenaVolume.from.x + 1
+        },
+        to: {
+            x: arenaVolume.to.x - 1,
+            y: arenaVolume.from.y + 3,
+            z: arenaVolume.to.z - 1
+        }
     };
-    const wallX2To = {
-        x: arenaVolume.to.x,
-        y: arenaVolume.to.y - 1,
-        z: arenaVolume.to.z
-    };
-    fillBlocks(overworld, wallX2From, wallX2To, "minecraft:bedrock");
+    fillBlocks(overworld, grassVolume, "minecraft:grass_block");
 
-    const wallZ1From = {
-        x: arenaVolume.from.x,
-        y: arenaVolume.from.y,
-        z: arenaVolume.from.z
+    const airVolume: IVolume = {
+        from: {
+            x: arenaVolume.from.x + 1,
+            y: arenaVolume.from.y + 4,
+            z: arenaVolume.from.z + 1
+        },
+        to: {
+            x: arenaVolume.to.x - 1,
+            y: arenaVolume.to.y, // -0 instead of -1 because the waterlogged barriers don't get replaced otherwise
+            z: arenaVolume.to.z - 1
+        }
     };
-    const wallZ1To = {
-        x: arenaVolume.to.x,
-        y: arenaVolume.to.y - 1,
-        z: arenaVolume.from.z
-    };
-    fillBlocks(overworld, wallZ1From, wallZ1To, "minecraft:bedrock");
+    fillBlocks(overworld, airVolume, "minecraft:air");
+    // This does what the fix above SHOULD'VE done, but for some reason, it doesn't work otherwise
+    fillBlocks(overworld, airVolume, "minecraft:air");
 
-    const wallZ2From = {
-        x: arenaVolume.from.x,
-        y: arenaVolume.from.y,
-        z: arenaVolume.to.z
+    const roofVolume: IVolume = {
+        from: {
+            x: arenaVolume.from.x,
+            y: arenaVolume.to.y,
+            z: arenaVolume.from.z
+        },
+        to: {
+            x: arenaVolume.to.x,
+            y: arenaVolume.to.y,
+            z: arenaVolume.to.z
+        }
     };
-    const wallZ2To = {
-        x: arenaVolume.to.x,
-        y: arenaVolume.to.y - 1,
-        z: arenaVolume.to.z
-    };
-    fillBlocks(overworld, wallZ2From, wallZ2To, "minecraft:bedrock");
+    fillBlocks(overworld, roofVolume, "minecraft:barrier");
 
-    // extra air on top of the arena
-    const airOnRoofFrom = {
-        x: arenaVolume.from.x,
-        y: arenaVolume.to.y + 1,
-        z: arenaVolume.from.z
-    }
-    const airOnRoofTo = {
-        x: arenaVolume.to.x,
-        y: arenaVolume.to.y + 6,
-        z: arenaVolume.to.z
-    }
-    fillBlocks(overworld, airOnRoofFrom, airOnRoofTo, "minecraft:air");
+    const wallX1Volume: IVolume = {
+        from: {
+            x: arenaVolume.from.x,
+            y: arenaVolume.from.y,
+            z: arenaVolume.from.z
+        },
+        to: {
+            x: arenaVolume.from.x,
+            y: arenaVolume.to.y - 1,
+            z: arenaVolume.to.z
+        }
+    };
+    fillBlocks(overworld, wallX1Volume, "minecraft:bedrock");
+
+    const wallX2Volume: IVolume = {
+        from: {
+            x: arenaVolume.to.x,
+            y: arenaVolume.from.y,
+            z: arenaVolume.from.z
+        },
+        to: {
+            x: arenaVolume.to.x,
+            y: arenaVolume.to.y - 1,
+            z: arenaVolume.to.z
+        }
+    };
+    fillBlocks(overworld, wallX2Volume, "minecraft:bedrock");
+
+    const wallZ1Volume: IVolume = {
+        from: {
+            x: arenaVolume.from.x,
+            y: arenaVolume.from.y,
+            z: arenaVolume.from.z
+        },
+        to: {
+            x: arenaVolume.to.x,
+            y: arenaVolume.to.y - 1,
+            z: arenaVolume.from.z
+        }
+    };
+    fillBlocks(overworld, wallZ1Volume, "minecraft:bedrock");
+
+    const wallZ2Volume: IVolume = {
+        from: {
+            x: arenaVolume.from.x,
+            y: arenaVolume.from.y,
+            z: arenaVolume.to.z
+        },
+        to: {
+            x: arenaVolume.to.x,
+            y: arenaVolume.to.y - 1,
+            z: arenaVolume.to.z
+        }
+    };
+    fillBlocks(overworld, wallZ2Volume, "minecraft:bedrock");
+
+// Extra air on top of the arena
+    const airOnRoofVolume: IVolume = {
+        from: {
+            x: arenaVolume.from.x,
+            y: arenaVolume.to.y + 1,
+            z: arenaVolume.from.z
+        },
+        to: {
+            x: arenaVolume.to.x,
+            y: arenaVolume.to.y + 6,
+            z: arenaVolume.to.z
+        }
+    };
+    fillBlocks(overworld, airOnRoofVolume, "minecraft:air");
+
 
     world.sendMessage("§aArena cleared!");
     sendSubtitle("\n\n§aArena cleared!", 3, 28, 21);
 }
 
 
-function findArenaSpawn() {
+function findArenaSpawn(): DimensionLocation {
     const attemptCount = 20;
 
     for (let i = 0; i < attemptCount; i++) {
         const x = Math.floor(arenaVolume.from.x + Math.random() * (arenaVolume.to.x - arenaVolume.from.x));
         const z = Math.floor(arenaVolume.from.z + Math.random() * (arenaVolume.to.z - arenaVolume.from.z));
-        const location = {x: x, y: arenaVolume.from.y + 4, z: z};
+        const location = {dimension: overworld, x: x, y: arenaVolume.from.y + 4, z: z};
         const block = overworld.getBlock(location);
         if (block.isAir) {
             return location;
@@ -386,6 +434,7 @@ function findArenaSpawn() {
     log(warnMessage);
     console.warn(warnMessage);
     return {
+        dimension: overworld,
         x: arenaVolume.from.x + (arenaVolume.to.x - arenaVolume.from.x) / 2,
         y: arenaVolume.from.y + 4,
         z: arenaVolume.from.z + (arenaVolume.to.z - arenaVolume.from.z) / 2
@@ -394,52 +443,54 @@ function findArenaSpawn() {
 
 
 // teleport joined and respawned players into lobby
-world.afterEvents.playerSpawn.subscribe(data => {
-    moveToSpawn(data.player);
+world.afterEvents.playerSpawn.subscribe(event => {
+    moveToSpawn(event.player);
 
     // Greet joined players
-    if (data.initialSpawn) {
-        data.player.playSound("random.levelup");
-        data.player.onScreenDisplay.setTitle("§gWelcome!", {fadeInDuration: 30, stayDuration: 40, fadeOutDuration: 30});
+    if (event.initialSpawn) {
+        event.player.playSound("random.levelup");
+        event.player.onScreenDisplay.setTitle("§gWelcome!", {fadeInDuration: 30, stayDuration: 40, fadeOutDuration: 30});
     }
 });
 
 
 // handle kill, death
-world.afterEvents.entityDie.subscribe(data => {
-    if (!isValidPlayer(data.deadEntity)) {
+world.afterEvents.entityDie.subscribe(event => {
+    if (!isValidPlayer(event.deadEntity)) {
         return;
     }
 
-    let scoreboardDeaths = getObjective("deaths");
-    let scoreboardKills = getObjective("kills");
-    let scoreboardKillstreak = getObjective("killstreak");
+    let scoreboardDeaths: ScoreboardObjective = getObjective("deaths");
+    let scoreboardKills: ScoreboardObjective = getObjective("kills");
+    let scoreboardKillstreak: ScoreboardObjective = getObjective("killstreak");
 
-    scoreboardDeaths.addScore(data.deadEntity, 1);
-    scoreboardKillstreak.setScore(data.deadEntity, 0);
+    scoreboardDeaths.addScore(event.deadEntity, 1);
+    scoreboardKillstreak.setScore(event.deadEntity, 0);
 
     // Try to find a killer by finding the player who dealt the most damage to the victim
-    let attacker;
-    let attackersSorted = [];
+    let attacker: Player = null;
+    let attackersSorted: [string, number][] = [];
 
-    if (data.deadEntity.id in playerDamages) {
-        attackersSorted = Object.entries(playerDamages[data.deadEntity.id])
-            .filter(([attacker, damage]) => damage >= 5)
-            .toSorted(([attacker1, damage1], [attacker2, damage2]) => damage1 > damage2 ? -1 : 1);
+    if (event.deadEntity.id in playerDamages) {
+        attackersSorted = Object.entries(playerDamages[event.deadEntity.id]);
+        if (attackersSorted.length > 0) {
+            attackersSorted = attackersSorted.filter(([, damage]) => damage >= 5);
+            attackersSorted.sort(([, damage1], [, damage2]) => damage1 > damage2 ? -1 : 1);
+        }
     }
 
     if (attackersSorted.length > 0) {
         let attackerID = attackersSorted[0][0];
-        attacker = getPlayerByID(attackerID);   // can be null
+        attacker = getPlayerByID(attackerID);   // return value can be null
     }
-    else if (isValidPlayer(data.damageSource?.damagingEntity)) {
-        attacker = data.damageSource.damagingEntity;
+    else if (isValidPlayer(event.damageSource?.damagingEntity)) {
+        attacker = event.damageSource.damagingEntity as Player;
     }
 
-    delete playerDamages[data.deadEntity.id];
-    if (!isValid(attacker)) return;
+    delete playerDamages[event.deadEntity.id];
+    if (attacker === null) return;
 
-    const attackerIsInArena = attacker.hasTag("arena");
+    const attackerIsInArena: boolean = attacker.hasTag("arena");
     scoreboardKills.addScore(attacker, 1);
     attacker.playSound("dig.snow", {pitch: 1});
     attacker.playSound("break.amethyst_cluster", {pitch: 1.7});
@@ -455,26 +506,18 @@ world.afterEvents.entityDie.subscribe(data => {
 
 
 // Keep track of player damages to determine who to award the kill if the death is indirect (fall damage, ender pearl damage, lava, fire, burning)
-world.afterEvents.entityHurt.subscribe(data => {
-    if (!isValidPlayer(data.hurtEntity) || !isValidPlayer(data.damageSource?.damagingEntity)) {
+world.afterEvents.entityHurt.subscribe(event => {
+    if (!isValidPlayer(event.hurtEntity) || !isValidPlayer(event.damageSource?.damagingEntity)) {
         return;
     }
 
-    const victim = data.hurtEntity;
-    const attacker = data.damageSource.damagingEntity;
-    const damageAmount = data.damage;
-
-    // if (attacker.id in playersSpawnProtection || 1) {
-    //     // https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/entityhealthcomponent?view=minecraft-bedrock-stable
-    //     const healthComponent = victim.getComponent(EntityComponentTypes.Health);
-    //     const victimHealth = healthComponent.currentValue;
-    //     healthComponent.resetToMaxValue();
-    //     victim.applyDamage(20 - victimHealth);
-    // }
+    const victim: Player = event.hurtEntity as Player;
+    const attacker: Player = event.damageSource.damagingEntity as Player;
+    const damageAmount: number = event.damage;
 
     // Projectile hit confirmation sound
-    if (isValid(data.damageSource?.damagingProjectile)) {
-        switch (data.damageSource.damagingProjectile.typeId) {
+    if (event.damageSource?.damagingProjectile !== null) {
+        switch (event.damageSource.damagingProjectile.typeId) {
             case "minecraft:arrow":
                 attacker.playSound("random.orb", {pitch: 0.5});
                 break;
@@ -488,9 +531,9 @@ world.afterEvents.entityHurt.subscribe(data => {
     }
 
     // Save the cumulative damages for determining kills later
-    if (!isValid(playerDamages[victim.id])) {
+    if (!(victim.id in playerDamages)) {
         playerDamages[victim.id] = {attackerID: damageAmount};
-    } else if (!isValid(playerDamages[victim.id][attacker.id])) {
+    } else if (!(attacker.id in playerDamages[victim.id])) {
         playerDamages[victim.id][attacker.id] = damageAmount
     } else {
         playerDamages[victim.id][attacker.id] += damageAmount;
@@ -501,71 +544,52 @@ world.afterEvents.entityHurt.subscribe(data => {
 });
 
 
-world.afterEvents.entityHitEntity.subscribe(data => {
-    if (!isValidPlayer(data.damagingEntity) || !isValidPlayer(data.hitEntity)) return;
-    if (!(data.damagingEntity.id in playersSpawnProtection || data.hitEntity.id in playersSpawnProtection)) return;
-    log(6)
-});
+// world.afterEvents.entityHitEntity.subscribe(event => {
+//     if (!isValidPlayer(event.damagingEntity)) return;
+//     if (!isValidPlayer(event.hitEntity)) return;
+//     if (!(event.damagingEntity.id in playersSpawnProtection || event.hitEntity.id in playersSpawnProtection)) return;
+//     log(6)
+// });
 
 
 // Delete Player damages when attacker leaves world
-world.beforeEvents.playerLeave.subscribe(data => {
-    delete playerDamages[data.player.id];
+world.beforeEvents.playerLeave.subscribe(event => {
+    delete playerDamages[event.player.id];
 });
 
 
 // Prevent using ender pearls outside the arena
-world.beforeEvents.itemUse.subscribe(data => {
-    if (data.itemStack.typeId !== "minecraft:ender_pearl") return;
-    if (data.source.id in arenaPlayers) return;
-    data.cancel = true;
+world.beforeEvents.itemUse.subscribe(event => {
+    if (event.itemStack.typeId !== "minecraft:ender_pearl") return;
+    if (event.source.id in arenaPlayers) return;
+    event.cancel = true;
 });
 
 
 // Prevent placing boats
-world.beforeEvents.itemUseOn.subscribe(data => {
-    if (data.itemStack.type.id.includes("boat")) {
-        data.cancel = true;
+world.beforeEvents.itemUseOn.subscribe(event => {
+    if (event.itemStack.type.id.includes("boat")) {
+        event.cancel = true;
     }
 });
 
 
 // entity timeout killer: add to list
-world.afterEvents.entitySpawn.subscribe(data => {
-    const typeID = data.entity.typeId;
-    const entityID = data.entity.id;
-    const now = new Date();
+world.afterEvents.entitySpawn.subscribe(event => {
+    if (!(event.entity.typeId in entityKillTimes)) return;
 
-    switch (typeID) {
-        case "minecraft:arrow":
-        case "minecraft:item":
-            entityTimestamps[entityID] = now;
-            break;
-    }
-});
-
-
-// entity timeout killer: remove entity
-system.runInterval(() => {
-    const now = new Date();
-
-    Object.entries(entityTimestamps).forEach(([entityID, timestamp]) => {
-        let entity = world.getEntity(entityID);
-        if (!isValid(entity)) return;
-
-        if ((now - timestamp)/1000 < entityKillTimes[entity.typeId]) return;
-        delete entityTimestamps[entityID];
-        entity.kill();
+    const killTimeTicks: number = entityKillTimes[event.entity.typeId];
+    system.waitTicks(killTimeTicks).then(() => {
+        event.entity.kill();
     });
-}, 20);
-
+});
 
 
 // Increase Playtime
 system.runInterval(() => {
-    let scoreboardPlaytime = getObjective("playtime");
+    let scoreboardPlaytime: ScoreboardObjective = getObjective("playtime");
 
-    world.getAllPlayers().forEach(player => {
+    overworld.getPlayers().forEach(player => {
         scoreboardPlaytime.addScore(player, 1);
     });
 }, 1);
@@ -573,15 +597,15 @@ system.runInterval(() => {
 
 // Effects, location based stuff
 system.runInterval(() => {
-    world.getAllPlayers().forEach(player => {
-        if (!player.isValid()) return;
+    overworld.getPlayers().forEach(player => {
+        if (!player.isValid) return;
 
         player.addEffect("night_vision", 20_000_000, {showParticles: false});
 
-        const inLobby = isPointInsideVolume(lobbyVolume, player.location);
-        const inJoinArena = isPointInsideVolume(joinArenaVolume, player.location);
-        const inPreArena = isPointInsideVolume(preArenaVolume, player.location);
-        const inArena = isPointInsideVolume(arenaVolume, player.location);
+        const inLobby: boolean = isPointInsideVolume(lobbyVolume, player.location);
+        const inJoinArena: boolean = isPointInsideVolume(joinArenaVolume, player.location);
+        const inPreArena: boolean = isPointInsideVolume(preArenaVolume, player.location);
+        const inArena: boolean = isPointInsideVolume(arenaVolume, player.location);
 
         if (inArena && !(player.id in arenaPlayers)) {
             // this occurs when an ender pearl lands after the player has died
@@ -647,12 +671,12 @@ system.runInterval(() => {
     let scoreboardKills = getObjective("kills");
     let scoreboardDeaths = getObjective("deaths");
 
-    let allPlayers = world.getAllPlayers();
+    let allPlayers = overworld.getPlayers();
     let onlineCount = allPlayers.length;
 
     allPlayers.forEach((player) => {
         let playtimeTotalTicks = scoreboardPlaytime.getScore(player);
-        playtimeTotalTicks = isValid(playtimeTotalTicks) ? playtimeTotalTicks : 0;
+        playtimeTotalTicks = playtimeTotalTicks === undefined ? 0 : playtimeTotalTicks;
 
         if (!isValidPlayer(player)) {
             return;
@@ -721,10 +745,10 @@ system.runInterval(() => {
 
 // Update Leaderboard
 system.runInterval(() => {
-    let scoreboardLeaderboard = getObjective("leaderboard", "§gLeaderboard");
+    let scoreboardLeaderboard: ScoreboardObjective = getObjective("leaderboard", "§gLeaderboard");
     scoreboardLeaderboard.getParticipants().forEach(participant => scoreboardLeaderboard.removeParticipant(participant));
 
-    let allPlayers = world.getAllPlayers();
+    let allPlayers = overworld.getPlayers();
     let scoreboardKills = getObjective("kills");
     let scoreboardDeaths = getObjective("deaths");
 
@@ -795,7 +819,15 @@ system.runInterval(() => {
 
 
 
-// Global variables
+// Constants
+const playerNameCharset: string[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ()".split("");
+const admins: string[] = [
+    "BioTomateDE",
+    "HeiligTomate",
+    "latuskati",
+    "Tomatigga"
+]
+
 const lobbyVolume = {
     from: {
         x: 9990,
@@ -808,7 +840,6 @@ const lobbyVolume = {
         z: 10010
     }
 }
-
 const preArenaVolume = {
     from: {
         x: 9992,
@@ -821,7 +852,6 @@ const preArenaVolume = {
         z: 10009
     }
 }
-
 const joinArenaVolume = {
     from: {
         x: 9999,
@@ -834,7 +864,6 @@ const joinArenaVolume = {
         z: 10008
     }
 }
-
 const arenaVolume = {
     from: {
         x: 19910,
@@ -848,20 +877,18 @@ const arenaVolume = {
     }
 }
 
-const kits = ["samurai", "sniper", "tank", "fighter", "maceling", "newgen"];
-
-let playerDamages = {};                 // Dictionary<VictimPlayerID: Dictionary<AttackerPlayerID: DamageAmount>>
-
-let entityTimestamps = {}               // Dictionary<EntityID: SpawnTimestampUnix>
-const entityKillTimes = {
-    "minecraft:arrow": 5.0,
-    "minecraft:item": 25.0,
-};                                          // Dictionary<EntityType: KillTimeSeconds>
-
+const kits: string[] = ["samurai", "sniper", "tank", "fighter", "maceling", "newgen"];
+const entityKillTimes: {[string: string]: number} = {
+    "minecraft:arrow": 20 * 5,
+    "minecraft:item": 20 * 25,
+};                                                              // Dictionary[EntityType: KillTimeTicks]
 const overworld = world.getDimension("overworld");
 
-let arenaPlayers = {};                  // Dictionary<PlayerID: PlayerObject>
-let playersSpawnProtection = {};        // Dictionary<PlayerID: SpawnProtectionEndTimestamp>
+
+// Global Variables
+let arenaPlayers: {string: Player} | {} = {};                   // Dictionary<PlayerID: PlayerObject>
+let playerDamages: {string: {string: number} | {}} | {} = {};   // Dictionary[VictimPlayerID: Dictionary[AttackerPlayerID: DamageAmount]]
+let playersSpawnProtection: {string: Date} | {} = {};           // Dictionary<PlayerID: SpawnProtectionEndTimestamp>
 
 
 log("[§4KitFFA§r]§a Addon loaded!");
