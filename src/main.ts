@@ -1,18 +1,22 @@
 import {
-    world,
-    system,
-    Player,
-    Entity,
-    PlatformType,
-    TicksPerSecond,
+    BlockFillOptions,
+    BlockPermutation,
+    BlockType,
     BlockVolume,
     Dimension,
+    DimensionLocation,
+    Entity,
     GameMode,
-    HudVisibility,
     HudElement,
+    HudVisibility,
+    PlatformType,
+    Player,
     ScoreboardObjective,
-    BlockPermutation, BlockType, BlockFillOptions, DimensionLocation
+    system,
+    TicksPerSecond,
+    world
 } from "@minecraft/server";
+
 // import * as diagnostics_channel from "node:diagnostics_channel";
 
 
@@ -86,7 +90,7 @@ function getObjective(objectiveName: string, creationDisplayName?: string): Scor
     }
     world.sendMessage(`[§gWARN§r] Creating objective "${objectiveName}" since it didn't exist!`);
     let objectiveDisplayName: string = objectiveName;
-    if (creationDisplayName !== null) {
+    if (creationDisplayName !== undefined) {
         objectiveDisplayName = creationDisplayName;
     }
     return world.scoreboard.addObjective(objectiveName, objectiveDisplayName);
@@ -122,7 +126,7 @@ function log(...args: any[]): void {
 
 
 function sendSubtitle(message: string, fadeIn: number, stay: number, fadeOut: number, players?: Player[]): void {
-    if (players === null) {
+    if (players === undefined) {
         players = overworld.getPlayers();
     }
 
@@ -159,15 +163,15 @@ function getKD(
     let kills: number = options['kills'];
     let deaths: number = options['deaths'];
 
-    if (kills === null) {
-        if (scoreboardKills === null) {
+    if (kills === undefined) {
+        if (scoreboardKills === undefined) {
             scoreboardKills = getObjective("kills");
         }
         kills = getScore(scoreboardKills, player);
     }
 
-    if (deaths === null) {
-        if (scoreboardDeaths === null) {
+    if (deaths === undefined) {
+        if (scoreboardDeaths === undefined) {
             scoreboardDeaths = getObjective("deaths");
         }
         deaths = getScore(scoreboardDeaths, player);
@@ -516,7 +520,7 @@ world.afterEvents.entityHurt.subscribe(event => {
     const damageAmount: number = event.damage;
 
     // Projectile hit confirmation sound
-    if (event.damageSource?.damagingProjectile !== null) {
+    if (event.damageSource?.damagingProjectile !== undefined) {
         switch (event.damageSource.damagingProjectile.typeId) {
             case "minecraft:arrow":
                 attacker.playSound("random.orb", {pitch: 0.5});
@@ -582,6 +586,14 @@ world.afterEvents.entitySpawn.subscribe(event => {
     system.waitTicks(killTimeTicks).then(() => {
         event.entity.kill();
     });
+});
+
+
+// Prevent waterlogged cobwebs
+world.afterEvents.itemUseOn.subscribe(event => {
+    if (event.itemStack.type.id !== "minecraft:water_bucket") return;
+    if (!event.block.matches("web")) return;
+    event.block.setType("water");
 });
 
 
@@ -892,7 +904,7 @@ let playersSpawnProtection: {string: Date} | {} = {};           // Dictionary<Pl
 
 
 log("[§4KitFFA§r]§a Addon loaded!");
-
+log("2!!!")
 
 
 // TODO:    don't kill when ender pearl tp on arena roof
@@ -900,7 +912,6 @@ log("[§4KitFFA§r]§a Addon loaded!");
 //          prevent out of bounds in general??
 //          prevent messing with armor stands
 //          tutorial on first join
-//          waterlogged cobweb clear
 //          more alerts (add friend to play again, saw someone cheating, render distance)
 //          unbanning
 //          kit selection
@@ -909,4 +920,3 @@ log("[§4KitFFA§r]§a Addon loaded!");
 //          balancing regarding ender pearls, cobwebs (change dropped items from kill if possible)
 //          remove duplicate items from inventory in general (buckets)
 //          more kits (stealth kit, lifesteal/vampire are now possible with addon)
-//          typescript
