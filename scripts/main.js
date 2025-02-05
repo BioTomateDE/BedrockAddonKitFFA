@@ -7,7 +7,7 @@ import {
     TicksPerSecond,
     BlockVolume,
     Dimension,
-    GameMode, HudVisibility, HudElement, EntityInitializationCause
+    GameMode, HudVisibility, HudElement, EntityInitializationCause, EntityComponentTypes
 } from "@minecraft/server";
 
 const admins = [
@@ -28,10 +28,10 @@ function isValid(value) {
 }
 
 
-function isValidPlayer(player) {
-    if (!isValid(player)) return false;
-    if (player.typeId !== "minecraft:player") return false;
-    if (!player.isValid()) return false;
+function isValidPlayer(entity) {
+    if (!isValid(entity)) return false;
+    if (entity.typeId !== "minecraft:player") return false;
+    if (!entity.isValid()) return false;
     return true;
 }
 
@@ -118,6 +118,14 @@ function sendSubtitle(message, fadeIn, stay, fadeOut, players = null) {
 }
 
 
+function moveToSpawn(player) {
+    player.runCommand("clear @s");
+    player.runCommand("effect @s clear");
+    player.runCommand("tp @s 10000 -39 10000 -90 0");
+    player.runCommand("inputpermission set @s jump enabled");
+}
+
+
 function getKD(player, options = {}) {
     let scoreboardKills = options['scoreboardKills'];
     let scoreboardDeaths = options['scoreboardDeaths'];
@@ -159,24 +167,78 @@ function showKillstreakMessage(player, killstreak) {
 }
 
 
-function fillLayers(dimension, from, to, block, blockOptions = null) {
-    // fills every Y level individually. dx*dz should still be under 32769.
-    // `to` should have all coordinates larger than `from`.
-    for (let y = from.y; y <= to.y; y++) {
-        const volume = new BlockVolume(
-            {x: from.x, y: y, z: from.z},
-            {x: to.x, y: y, z: to.z}
-        );
-        log(JSON.stringify(volume))
-        console.log(volume)
-        dimension.fillBlocks(volume, block, blockOptions);
+function generateCuboids(W, H, D, C) {
+    const cuboids = [];
+
+    function splitCuboid(x, y, z, width, height, depth) {
+        const volume = width * height * depth;
+
+        // Base Case: If the volume is within the limit, add cuboid
+        if (volume <= C) {
+            cuboids.push({x, y, z, width, height, depth});
+            return;
+        }
+
+        // Find the longest dimension to split
+        if (width >= height && width >= depth) {
+            // Split along width
+            let maxW = Math.min(width, Math.floor(C / (height * depth)));
+            if (maxW === 0) maxW = 1; // Ensure progress
+            splitCuboid(x, y, z, maxW, height, depth);
+            splitCuboid(x + maxW, y, z, width - maxW, height, depth);
+        } else if (height >= width && height >= depth) {
+            // Split along height
+            let maxH = Math.min(height, Math.floor(C / (width * depth)));
+            if (maxH === 0) maxH = 1;
+            splitCuboid(x, y, z, width, maxH, depth);
+            splitCuboid(x, y + maxH, z, width, height - maxH, depth);
+        } else {
+            // Split along depth
+            let maxD = Math.min(depth, Math.floor(C / (width * height)));
+            if (maxD === 0) maxD = 1;
+            splitCuboid(x, y, z, width, height, maxD);
+            splitCuboid(x, y, z + maxD, width, height, depth - maxD);
+        }
     }
+
+    // Start with the full cuboid at origin (0, 0, 0)
+    splitCuboid(0, 0, 0, W, H, D);
+    return cuboids;
+}
+
+
+function fillBlocks(dimension, from, to, block, options = {}) {
+    // Fills blocks while bypassing the 32768 block limit
+
+    const normalizedVolume = {
+        x: 1 + to.x - from.x,
+        y: 1 + to.y - from.y,
+        z: 1 + to.z - from.z
+    };
+
+    const normalizedCuboids = generateCuboids(normalizedVolume.x, normalizedVolume.y, normalizedVolume.z, 32768);
+    normalizedCuboids.forEach(normalizedCuboid => {
+
+        const cuboidPositionFrom = {
+            x: from.x + normalizedCuboid.x,
+            y: from.y + normalizedCuboid.y,
+            z: from.z + normalizedCuboid.z
+        }
+
+        const cuboidPositionTo = {
+            x: cuboidPositionFrom.x + normalizedCuboid.width - 1,
+            y: cuboidPositionFrom.y + normalizedCuboid.height - 1,
+            z: cuboidPositionFrom.z + normalizedCuboid.depth - 1
+        }
+
+        const volume = new BlockVolume(cuboidPositionFrom, cuboidPositionTo);
+        dimension.fillBlocks(volume, block, options);
+    });
 }
 
 
 function clearArena() {
     world.sendMessage("§aClearing Arena...");
-    const dimension = world.getDimension("overworld");
 
     const groundFrom = {
         x: arenaVolume.from.x + 1,
@@ -188,7 +250,7 @@ function clearArena() {
         y: arenaVolume.from.y,
         z: arenaVolume.to.z - 1
     }
-    fillLayers(dimension, groundFrom, groundTo, "minecraft:allow");
+    fillBlocks(overworld, groundFrom, groundTo, "minecraft:allow");
 
     const dirtFrom = {
         x: arenaVolume.from.x + 1,
@@ -200,7 +262,7 @@ function clearArena() {
         y: arenaVolume.from.y + 2,
         z: arenaVolume.to.z - 1
     }
-    fillLayers(dimension, dirtFrom, dirtTo, "minecraft:dirt");
+    fillBlocks(overworld, dirtFrom, dirtTo, "minecraft:dirt");
 
     const grassFrom = {
         x: arenaVolume.from.x + 1,
@@ -212,7 +274,7 @@ function clearArena() {
         y: arenaVolume.from.y + 3,
         z: arenaVolume.to.z - 1
     }
-    fillLayers(dimension, grassFrom, grassTo, "minecraft:grass_block");
+    fillBlocks(overworld, grassFrom, grassTo, "minecraft:grass_block");
 
     const airFrom = {
         x: arenaVolume.from.x + 1,
@@ -224,80 +286,69 @@ function clearArena() {
         y: arenaVolume.to.y,    // -0 instead of -1 because the waterlogged barries don't get replaced otherwise
         z: arenaVolume.to.z - 1
     }
-    fillLayers(dimension, airFrom, airTo, "minecraft:air");
+    fillBlocks(overworld, airFrom, airTo, "minecraft:air");
     // v this does what the fix above SHOULD'VE done, but for some fucking reason it doesn't work otherwise
-    fillLayers(dimension, airFrom, airTo, "minecraft:air");
+    fillBlocks(overworld, airFrom, airTo, "minecraft:air");
 
-    const volumeRoof = new BlockVolume(
-        {
-            x: arenaVolume.from.x,
-            y: arenaVolume.to.y,
-            z: arenaVolume.from.z
-        },
-        {
-            x: arenaVolume.to.x,
-            y: arenaVolume.to.y,
-            z: arenaVolume.to.z
-        }
-    );
-    dimension.fillBlocks(volumeRoof, "minecraft:barrier");
+    const roofFrom = {
+        x: arenaVolume.from.x,
+        y: arenaVolume.to.y,
+        z: arenaVolume.from.z
+    }
+    const roofTo = {
+        x: arenaVolume.to.x,
+        y: arenaVolume.to.y,
+        z: arenaVolume.to.z
+    }
+    fillBlocks(overworld, roofFrom, roofTo, "minecraft:barrier");
 
-    const volumeWallX1 = new BlockVolume(
-        {
-            x: arenaVolume.from.x,
-            y: arenaVolume.from.y,
-            z: arenaVolume.from.z
-        },
-        {
-            x: arenaVolume.from.x,
-            y: arenaVolume.to.y - 1,
-            z: arenaVolume.to.z
-        }
-    );
-    dimension.fillBlocks(volumeWallX1, "minecraft:bedrock");
+    const wallX1From = {
+        x: arenaVolume.from.x,
+        y: arenaVolume.from.y,
+        z: arenaVolume.from.z
+    };
+    const wallX1To = {
+        x: arenaVolume.from.x,
+        y: arenaVolume.to.y - 1,
+        z: arenaVolume.to.z
+    };
+    fillBlocks(overworld, wallX1From, wallX1To, "minecraft:bedrock");
 
-    const volumeWallX2 = new BlockVolume(
-        {
-            x: arenaVolume.to.x,
-            y: arenaVolume.from.y,
-            z: arenaVolume.from.z
-        },
-        {
-            x: arenaVolume.to.x,
-            y: arenaVolume.to.y - 1,
-            z: arenaVolume.to.z
-        }
-    );
-    dimension.fillBlocks(volumeWallX2, "minecraft:bedrock");
+    const wallX2From = {
+        x: arenaVolume.to.x,
+        y: arenaVolume.from.y,
+        z: arenaVolume.from.z
+    };
+    const wallX2To = {
+        x: arenaVolume.to.x,
+        y: arenaVolume.to.y - 1,
+        z: arenaVolume.to.z
+    };
+    fillBlocks(overworld, wallX2From, wallX2To, "minecraft:bedrock");
 
-    const volumeWallZ1 = new BlockVolume(
-        {
-            x: arenaVolume.from.x,
-            y: arenaVolume.from.y,
-            z: arenaVolume.from.z
-        },
-        {
-            x: arenaVolume.to.x,
-            y: arenaVolume.to.y - 1,
-            z: arenaVolume.from.z
-        }
-    );
-    dimension.fillBlocks(volumeWallZ1, "minecraft:bedrock");
+    const wallZ1From = {
+        x: arenaVolume.from.x,
+        y: arenaVolume.from.y,
+        z: arenaVolume.from.z
+    };
+    const wallZ1To = {
+        x: arenaVolume.to.x,
+        y: arenaVolume.to.y - 1,
+        z: arenaVolume.from.z
+    };
+    fillBlocks(overworld, wallZ1From, wallZ1To, "minecraft:bedrock");
 
-    const volumeWallZ2 = new BlockVolume(
-        {
-            x: arenaVolume.from.x,
-            y: arenaVolume.from.y,
-            z: arenaVolume.to.z
-        },
-        {
-            x: arenaVolume.to.x,
-            y: arenaVolume.to.y - 1,
-            z: arenaVolume.to.z
-        }
-    );
-    dimension.fillBlocks(volumeWallZ2, "minecraft:bedrock");
-
+    const wallZ2From = {
+        x: arenaVolume.from.x,
+        y: arenaVolume.from.y,
+        z: arenaVolume.to.z
+    };
+    const wallZ2To = {
+        x: arenaVolume.to.x,
+        y: arenaVolume.to.y - 1,
+        z: arenaVolume.to.z
+    };
+    fillBlocks(overworld, wallZ2From, wallZ2To, "minecraft:bedrock");
 
     // extra air on top of the arena
     const airOnRoofFrom = {
@@ -310,25 +361,47 @@ function clearArena() {
         y: arenaVolume.to.y + 6,
         z: arenaVolume.to.z
     }
-    fillLayers(dimension, airOnRoofFrom, airOnRoofTo, "minecraft:air");
+    fillBlocks(overworld, airOnRoofFrom, airOnRoofTo, "minecraft:air");
 
     world.sendMessage("§aArena cleared!");
     sendSubtitle("\n\n§aArena cleared!", 3, 28, 21);
 }
 
 
-// spawn joined players into lobby
-world.afterEvents.playerSpawn.subscribe(data => {
-    if (!data.initialSpawn) {
-        return;
+function findArenaSpawn() {
+    const attemptCount = 20;
+
+    for (let i = 0; i < attemptCount; i++) {
+        const x = Math.floor(arenaVolume.from.x + Math.random() * (arenaVolume.to.x - arenaVolume.from.x));
+        const z = Math.floor(arenaVolume.from.z + Math.random() * (arenaVolume.to.z - arenaVolume.from.z));
+        const location = {x: x, y: arenaVolume.from.y + 4, z: z};
+        const block = overworld.getBlock(location);
+        if (block.isAir) {
+            return location;
+        }
     }
 
-    // player just joined the game; move to spawn
-    data.player.runCommand("clear @s");
-    data.player.runCommand("effect @s clear");
-    data.player.removeTag("arena");
-    data.player.runCommand("tp @s 10000 -39 10000 -90 0");
-    data.player.runCommand("inputpermission set @s jump enabled");
+    // failed to find valid spawn location within `attemptCount` attempts; spawn in center and raise warning
+    const warnMessage = `[§eWARN§r] Could not find valid Arena spawn location within ${attemptCount} attempts!`;
+    log(warnMessage);
+    console.warn(warnMessage);
+    return {
+        x: arenaVolume.from.x + (arenaVolume.to.x - arenaVolume.from.x) / 2,
+        y: arenaVolume.from.y + 4,
+        z: arenaVolume.from.z + (arenaVolume.to.z - arenaVolume.from.z) / 2
+    }
+}
+
+
+// teleport joined and respawned players into lobby
+world.afterEvents.playerSpawn.subscribe(data => {
+    moveToSpawn(data.player);
+
+    // Greet joined players
+    if (data.initialSpawn) {
+        data.player.playSound("random.levelup");
+        data.player.onScreenDisplay.setTitle("§gWelcome!", {fadeInDuration: 30, stayDuration: 40, fadeOutDuration: 30});
+    }
 });
 
 
@@ -391,6 +464,14 @@ world.afterEvents.entityHurt.subscribe(data => {
     const attacker = data.damageSource.damagingEntity;
     const damageAmount = data.damage;
 
+    // if (attacker.id in playersSpawnProtection || 1) {
+    //     // https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server/entityhealthcomponent?view=minecraft-bedrock-stable
+    //     const healthComponent = victim.getComponent(EntityComponentTypes.Health);
+    //     const victimHealth = healthComponent.currentValue;
+    //     healthComponent.resetToMaxValue();
+    //     victim.applyDamage(20 - victimHealth);
+    // }
+
     // Projectile hit confirmation sound
     if (isValid(data.damageSource?.damagingProjectile)) {
         switch (data.damageSource.damagingProjectile.typeId) {
@@ -420,9 +501,24 @@ world.afterEvents.entityHurt.subscribe(data => {
 });
 
 
+world.afterEvents.entityHitEntity.subscribe(data => {
+    if (!isValidPlayer(data.damagingEntity) || !isValidPlayer(data.hitEntity)) return;
+    if (!(data.damagingEntity.id in playersSpawnProtection || data.hitEntity.id in playersSpawnProtection)) return;
+    log(6)
+});
+
+
 // Delete Player damages when attacker leaves world
 world.beforeEvents.playerLeave.subscribe(data => {
     delete playerDamages[data.player.id];
+});
+
+
+// Prevent using ender pearls outside the arena
+world.beforeEvents.itemUse.subscribe(data => {
+    if (data.itemStack.typeId !== "minecraft:ender_pearl") return;
+    if (data.source.id in arenaPlayers) return;
+    data.cancel = true;
 });
 
 
@@ -434,7 +530,7 @@ world.beforeEvents.itemUseOn.subscribe(data => {
 });
 
 
-// Item, arrow killer
+// entity timeout killer: add to list
 world.afterEvents.entitySpawn.subscribe(data => {
     const typeID = data.entity.typeId;
     const entityID = data.entity.id;
@@ -449,7 +545,7 @@ world.afterEvents.entitySpawn.subscribe(data => {
 });
 
 
-// Item, Arrow killer
+// entity timeout killer: remove entity
 system.runInterval(() => {
     const now = new Date();
 
@@ -461,7 +557,7 @@ system.runInterval(() => {
         delete entityTimestamps[entityID];
         entity.kill();
     });
-}, 10);
+}, 20);
 
 
 
@@ -483,11 +579,20 @@ system.runInterval(() => {
         player.addEffect("night_vision", 20_000_000, {showParticles: false});
 
         const inLobby = isPointInsideVolume(lobbyVolume, player.location);
+        const inJoinArena = isPointInsideVolume(joinArenaVolume, player.location);
         const inPreArena = isPointInsideVolume(preArenaVolume, player.location);
         const inArena = isPointInsideVolume(arenaVolume, player.location);
 
+        if (inArena && !(player.id in arenaPlayers)) {
+            // this occurs when an ender pearl lands after the player has died
+            moveToSpawn(player);
+            return;
+        }
+
         if (!inArena) {
             kits.forEach(kit => player.removeTag(`kit_${kit}`));
+            delete arenaPlayers[player.id];
+            delete playersSpawnProtection[player.id];
         }
 
         if (inLobby) {
@@ -505,8 +610,35 @@ system.runInterval(() => {
             player.addEffect("resistance", 60, {showParticles: false});
             player.addEffect("instant_health", 60, {showParticles: false});
         }
+
+        if (inJoinArena) {
+            arenaPlayers[player.id] = player;
+            playersSpawnProtection[player.id] = new Date(new Date().getTime() + 5000);
+            player.addEffect("weakness", 100, {showParticles: true});
+            player.addEffect("resistance", 100, {showParticles: true});
+
+            let spawnPosition = findArenaSpawn();
+            player.teleport(spawnPosition);
+            player.playSound("random.levelup", {volume: 1000, pitch: 0.5, location: spawnPosition});
+            player.runCommand("inputpermission set @s jump enabled");    // TODO remove when better system
+        }
     })
 }, 2);
+
+
+// Remove spawn protection
+system.runInterval(() => {
+    const now = new Date();
+
+    Object.entries(playersSpawnProtection).forEach(([playerID, endTimestamp]) => {
+        if (endTimestamp > now) return;
+
+        delete playersSpawnProtection[playerID];
+        const player = getPlayerByID(playerID);
+        sendSubtitle("§cYour spawn protection has expired.", 2, 40, 10, [player]);
+        player.playSound("random.anvil_land", {volume: 1000, pitch: 0.8});
+    });
+}, 10);
 
 
 // Update Actionbar, Nametags, HUD visibility
@@ -582,7 +714,7 @@ system.runInterval(() => {
         player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, [HudElement.ItemText]);
 
         // v  should be unnecessary if no player's spawnpoint is set (setworldspawn instead)
-        player.setSpawnPoint({dimension: world.getDimension("overworld"), x: 10000, y: -39, z: 10000});
+        player.setSpawnPoint({dimension: overworld, x: 10000, y: -39, z: 10000});
     })
 }, 10);
 
@@ -621,8 +753,9 @@ system.runInterval(() => {
         log(`§4Kicking banned player §c${player.name}§4.`);
         const banMessage = `§4You have been §mpermanently§4\nbanned from this world, loser!`;
         const command = `kick ${commandifyPlayerName(player.name)} \n${banMessage}`;
-        world.getDimension("overworld").runCommand(command);
+        overworld.runCommand(command);
     });
+    // TODO unbanning
 }, 10);
 
 
@@ -643,10 +776,22 @@ system.runInterval(() => {
 }, 5 * 60 * TicksPerSecond);
 
 
-// Discord Message
+// Alerts: Join Discord
 system.runInterval(() => {
     world.sendMessage("§2Join the Discord for updates and hosting times or give us suggestions for kits: §5bit.ly/tomatigga§r");
-}, 3000);
+}, 20 * 60 * 3.512);
+
+
+// Alerts: Render Distance
+system.runInterval(() => {
+    sendSubtitle(`\n§cPlease set render\ndistance to 5!`, 0, 50, 10);
+}, 20 * 60 * 2.34);
+
+
+// Alerts: Add friend to play again
+system.runInterval(() => {
+    world.sendMessage("§dAdd §5latuskati§d, §5HeiligTomate §dand §5Tomatigga §dto play again!");
+}, 20 * 60 * 4.26);
 
 
 
@@ -677,11 +822,24 @@ const preArenaVolume = {
     }
 }
 
+const joinArenaVolume = {
+    from: {
+        x: 9999,
+        y: 0,
+        z: 10006
+    },
+    to: {
+        x: 10001,
+        y: 3,
+        z: 10008
+    }
+}
+
 const arenaVolume = {
     from: {
-        x: 19810,
+        x: 19910,
         y: -64,
-        z: 19810
+        z: 19910
     },
     to: {
         x: 20090,
@@ -692,14 +850,36 @@ const arenaVolume = {
 
 const kits = ["samurai", "sniper", "tank", "fighter", "maceling", "newgen"];
 
+let playerDamages = {};                 // Dictionary<VictimPlayerID: Dictionary<AttackerPlayerID: DamageAmount>>
 
-let playerDamages = {};     // Dictionary<VictimPlayerID, Dictionary<AttackerPlayerID, DamageAmount>>
-
-let entityTimestamps = {}   // Dictionary<EntityID, SpawnTimestampUnix>
+let entityTimestamps = {}               // Dictionary<EntityID: SpawnTimestampUnix>
 const entityKillTimes = {
     "minecraft:arrow": 5.0,
     "minecraft:item": 25.0,
-};                              // Dictionary<EntityType, KillTimeSeconds>
+};                                          // Dictionary<EntityType: KillTimeSeconds>
+
+const overworld = world.getDimension("overworld");
+
+let arenaPlayers = {};                  // Dictionary<PlayerID: PlayerObject>
+let playersSpawnProtection = {};        // Dictionary<PlayerID: SpawnProtectionEndTimestamp>
 
 
 log("[§4KitFFA§r]§a Addon loaded!");
+
+
+
+// TODO:    don't kill when ender pearl tp on arena roof
+//          clamp position or smth when ender pearl tp through arena wall
+//          prevent out of bounds in general??
+//          prevent messing with armor stands
+//          tutorial on first join
+//          waterlogged cobweb clear
+//          more alerts (add friend to play again, saw someone cheating, render distance)
+//          unbanning
+//          kit selection
+//          kit get items
+//          undroppable kit weapons
+//          balancing regarding ender pearls, cobwebs (change dropped items from kill if possible)
+//          remove duplicate items from inventory in general (buckets)
+//          more kits (stealth kit, lifesteal/vampire are now possible with addon)
+//          typescript
